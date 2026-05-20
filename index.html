@@ -1131,7 +1131,7 @@ let _dupResolveCallback = null;
 function setSyncStatus(state, msg) {
   const el = document.getElementById('syncStatus');
   if (!el) return;
-  el.className = 'syncStatus ' + state;
+  el.className = state;
   const dot = state === 'syncing' ? '<span class="sync-dot pulse"></span>' : '<span class="sync-dot"></span>';
   el.innerHTML = dot + msg;
 }
@@ -1379,7 +1379,9 @@ function fuzzyMatch(text, q) {
 // ═══════════════════════════════════════════════════════════════════
 function applyFilter(list) {
   if (currentFilter === 'all')     return list;
-  if (currentFilter === 'missing') return list.filter(c => !c.email);
+  if (currentFilter === 'missing') {
+  return list.filter(c => !String(c.email || '').trim());
+}
   return list.filter(c => c.status === currentFilter);
 }
 
@@ -1552,7 +1554,9 @@ function renderPhonebook() {
 
   let all = dedupe([...contacts]);
 
-  if (pbFilter === 'missing')      all = all.filter(c => !c.email);
+  if (pbFilter === 'missing') {
+  all = all.filter(c => !String(c.email || '').trim());
+}
   else if (pbFilter !== 'all')     all = all.filter(c => c.status === pbFilter);
 
   const sortVal = (document.getElementById('pbSort') || {}).value || 'az';
