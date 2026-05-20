@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 /* ─── RESET & BASE ─────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -31,6 +32,9 @@
   --amber-d:     #78350f;
   --red:         #dc2626;
   --red-l:       #fee2e2;
+  --slate:       #475569;
+  --slate-l:     #f1f5f9;
+  --slate-d:     #1e293b;
   --text:        #1e1b4b;
   --text2:       #4b5563;
   --text3:       #9ca3af;
@@ -84,7 +88,7 @@ body {
   border: 1px solid var(--border2);
   background: var(--surface); color: var(--indigo);
   cursor: pointer; transition: var(--transition);
-  white-space: nowrap;
+  white-space: nowrap; display: inline-flex; align-items: center; gap: 5px;
 }
 .btn:hover { background: var(--indigo-xl); border-color: var(--indigo-l); transform: translateY(-1px); }
 .btn:active { transform: translateY(0); }
@@ -97,8 +101,27 @@ body {
 .btn.danger { color: var(--red); border-color: rgba(220,38,38,0.25); }
 .btn.danger:hover { background: var(--red-l); border-color: rgba(220,38,38,0.4); }
 
+/* ─── MODE TOGGLE (Search / Phonebook) ────────────────────────────── */
+.mode-toggle {
+  display: flex; align-items: center;
+  background: var(--indigo-xxl);
+  border-radius: 30px; padding: 3px;
+  border: 1px solid var(--border2); gap: 2px;
+}
+.mode-btn {
+  font-family: inherit; font-size: 12px; font-weight: 500;
+  padding: 5px 14px; border-radius: 24px; border: none;
+  background: transparent; color: var(--text2);
+  cursor: pointer; transition: var(--transition);
+}
+.mode-btn.active {
+  background: var(--indigo);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(99,102,241,0.3);
+}
+
 /* ─── MAIN LAYOUT ─────────────────────────────────────────────────── */
-.main { max-width: 760px; margin: 0 auto; padding: 28px 20px 80px; }
+.main { max-width: 760px; margin: 0 auto; padding: 28px 20px 120px; }
 
 /* ─── SEARCH BOX ──────────────────────────────────────────────────── */
 .search-wrap { position: relative; margin-bottom: 12px; }
@@ -154,6 +177,70 @@ body {
 .chip:hover { background: var(--indigo-xxl); color: var(--indigo); border-color: var(--indigo-l); }
 .chip.active { background: var(--indigo); color: #fff; border-color: var(--indigo); box-shadow: 0 2px 8px rgba(99,102,241,0.3); }
 
+/* ─── SELECT-ALL ROW ──────────────────────────────────────────────── */
+.select-all-row {
+  display: none; align-items: center; gap: 10px;
+  margin-bottom: 12px; padding: 8px 12px;
+  background: var(--indigo-xxl); border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.select-all-row.visible { display: flex; }
+.select-all-row label { font-size: 13px; font-weight: 500; color: var(--indigo); cursor: pointer; user-select: none; display: flex; align-items: center; gap: 7px; }
+.select-all-row .sel-count { font-size: 12px; color: var(--text3); margin-left: auto; }
+
+/* ─── CHECKBOX STYLING ────────────────────────────────────────────── */
+.card-checkbox {
+  position: absolute; top: 12px; left: 12px; z-index: 5;
+  width: 18px; height: 18px;
+  accent-color: var(--indigo);
+  cursor: pointer;
+  opacity: 0; transition: opacity 0.18s;
+}
+.card.selectable .card-checkbox { opacity: 1; }
+.card.selected {
+  border-color: var(--indigo);
+  box-shadow: 0 0 0 2px rgba(99,102,241,0.25), var(--shadow-card);
+  background: rgba(238,242,255,0.96);
+}
+.card.selected::after {
+  content: ''; position: absolute; inset: 0; border-radius: var(--radius);
+  background: rgba(99,102,241,0.04); pointer-events: none;
+}
+.card.selectable .card-inner { padding-left: 38px; }
+
+/* ─── FLOATING BULK ACTION BAR ────────────────────────────────────── */
+#bulkBar {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(80px);
+  z-index: 300;
+  background: #fff;
+  border: 1.5px solid var(--border2);
+  border-radius: 50px;
+  box-shadow: 0 8px 40px rgba(99,102,241,0.22), 0 2px 12px rgba(0,0,0,0.08);
+  padding: 10px 18px;
+  display: flex; align-items: center; gap: 10px;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.26s cubic-bezier(.4,0,.2,1), transform 0.26s cubic-bezier(.4,0,.2,1);
+  white-space: nowrap;
+}
+#bulkBar.visible {
+  opacity: 1; pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+#bulkBar .bulk-count {
+  font-size: 12px; font-weight: 600; color: var(--indigo);
+  background: var(--indigo-xl); padding: 4px 12px; border-radius: 20px;
+  border: 1px solid rgba(99,102,241,0.2);
+}
+#bulkBar .bulk-sep {
+  width: 1px; height: 24px; background: var(--border2); flex-shrink: 0;
+}
+.bulk-status-select {
+  font-family: inherit; font-size: 12px; font-weight: 500;
+  padding: 6px 12px; border-radius: 20px;
+  border: 1px solid var(--border2); background: var(--indigo-xxl);
+  color: var(--indigo); cursor: pointer; outline: none;
+}
+
 /* ─── DROPDOWN ────────────────────────────────────────────────────── */
 .dropdown-wrap { position: relative; }
 #dropdown {
@@ -176,8 +263,9 @@ body {
 .drop-name { flex: 1; }
 .drop-email { font-size: 11px; color: var(--text3); font-family: 'DM Mono', monospace; }
 .drop-badge { font-size: 10px; font-weight: 600; padding: 2px 9px; border-radius: 12px; flex-shrink: 0; }
-.db-active   { background: var(--green-l); color: var(--green-d); }
-.db-replaced { background: var(--amber-l); color: var(--amber-d); }
+.db-active      { background: var(--green-l);  color: var(--green-d); }
+.db-replaced    { background: var(--amber-l);  color: var(--amber-d); }
+.db-deactivated { background: var(--slate-l);  color: var(--slate-d); }
 .match-hl { color: var(--indigo); font-weight: 600; }
 
 /* ─── RESULTS HEADER ──────────────────────────────────────────────── */
@@ -186,6 +274,22 @@ body {
 
 /* ─── CARDS GRID ──────────────────────────────────────────────────── */
 #results { display: flex; flex-direction: column; gap: 14px; }
+
+/* ─── PHONEBOOK LETTER GROUP ──────────────────────────────────────── */
+.phonebook-letter-header {
+  position: sticky; top: 64px; z-index: 10;
+  font-size: 13px; font-weight: 700;
+  color: var(--indigo); letter-spacing: 0.04em;
+  background: rgba(240,244,255,0.92);
+  backdrop-filter: blur(12px);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  margin-bottom: 8px;
+  margin-top: 4px;
+  display: inline-block;
+}
+.phonebook-letter-group { margin-bottom: 16px; }
 
 /* ─── PAIR GROUP ──────────────────────────────────────────────────── */
 .pair-group { display: flex; flex-direction: column; gap: 0; }
@@ -220,15 +324,16 @@ body {
   content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
   transition: height 0.22s;
 }
-.card.active-card::before  { background: linear-gradient(90deg, #22c55e, #86efac); }
-.card.replaced-card::before { background: linear-gradient(90deg, #f59e0b, #fcd34d); }
+.card.active-card::before      { background: linear-gradient(90deg, #22c55e, #86efac); }
+.card.replaced-card::before    { background: linear-gradient(90deg, #f59e0b, #fcd34d); }
+.card.deactivated-card::before { background: linear-gradient(90deg, #94a3b8, #cbd5e1); }
 .card:hover {
   border-color: rgba(99,102,241,0.32);
   box-shadow: var(--shadow-hover);
   transform: translateY(-3px);
 }
 .card:hover::before { height: 4px; }
-.card-inner { padding: 16px 18px; }
+.card-inner { padding: 16px 18px; transition: padding 0.18s; }
 .card-top { display: flex; align-items: flex-start; gap: 13px; }
 .avatar {
   width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
@@ -241,6 +346,7 @@ body {
 .av-amber  { background: var(--amber-l);  color: var(--amber-d); }
 .av-indigo { background: var(--indigo-xl); color: var(--indigo-d); }
 .av-auto   { background: var(--indigo-xl); color: var(--indigo-d); }
+.av-slate  { background: var(--slate-l);  color: var(--slate-d); }
 .card-info { flex: 1; min-width: 0; }
 .card-name { font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-email-sub { font-size: 12px; color: var(--indigo-l); margin-top: 2px; font-family: 'DM Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -248,8 +354,9 @@ body {
   font-size: 10px; font-weight: 600; padding: 4px 11px; border-radius: 20px; flex-shrink: 0;
   letter-spacing: 0.03em;
 }
-.sp-active   { background: var(--green-l);  color: var(--green-d); }
-.sp-replaced { background: var(--amber-l);  color: var(--amber-d); }
+.sp-active      { background: var(--green-l);  color: var(--green-d); }
+.sp-replaced    { background: var(--amber-l);  color: var(--amber-d); }
+.sp-deactivated { background: var(--slate-l);  color: var(--slate-d); }
 .card-divider { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
 .card-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
 .card-row:last-child { margin-bottom: 0; }
@@ -335,12 +442,26 @@ body {
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 22px; }
 
 /* ─── IMPORT PREVIEW TABLE ────────────────────────────────────────── */
-.preview-table-wrap { max-height: 260px; overflow-y: auto; margin: 14px 0; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+.preview-table-wrap { max-height: 320px; overflow-y: auto; margin: 14px 0; border-radius: var(--radius-sm); border: 1px solid var(--border); }
 .preview-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .preview-table th { background: var(--indigo-xxl); color: var(--indigo); padding: 7px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; }
+.preview-table th:first-child { width: 36px; }
 .preview-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); color: var(--text); }
 .preview-table tr:last-child td { border-bottom: none; }
 .preview-table tr:hover td { background: var(--indigo-xxl); }
+.preview-table tr.row-deselected td { opacity: 0.4; }
+.preview-sel-count { font-size: 12px; color: var(--indigo); font-weight: 600; margin-left: 8px; }
+
+/* ─── DUPLICATE MODAL ─────────────────────────────────────────────── */
+.dup-option {
+  border: 1.5px solid var(--border2); border-radius: var(--radius-sm);
+  padding: 14px 16px; margin-bottom: 10px; cursor: pointer;
+  transition: var(--transition); display: flex; align-items: flex-start; gap: 12px;
+}
+.dup-option:hover { border-color: var(--indigo); background: var(--indigo-xxl); }
+.dup-option-icon { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
+.dup-option-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+.dup-option-desc  { font-size: 12px; color: var(--text3); }
 
 /* ─── SCROLLBAR ───────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; }
@@ -357,15 +478,263 @@ body {
   .topbar-actions { gap: 5px; }
   .btn { padding: 6px 10px; font-size: 11px; }
   .logo-name { font-size: 14px; }
-  .main { padding: 16px 12px 60px; }
+  .main { padding: 16px 12px 100px; }
   .strip-email { display: none; }
   .card-name { font-size: 14px; }
+  #bulkBar { width: calc(100% - 32px); border-radius: 16px; flex-wrap: wrap; }
 }
+
+/* ─── PHONEBOOK COMPACT LIST VIEW ────────────────────────────────── */
+.pb-list-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: var(--transition);
+  animation: fadeUp 0.18s ease both;
+  cursor: default;
+}
+.pb-list-item:hover {
+  border-color: rgba(99,102,241,0.32);
+  box-shadow: var(--shadow-hover);
+  transform: translateX(2px);
+}
+.pb-list-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+.pb-list-avatar {
+  width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+}
+.pb-list-name { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pb-list-email { font-size: 11px; color: var(--indigo-l); font-family: 'DM Mono', monospace; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+.pb-list-email.missing { color: var(--text3); font-style: italic; font-family: inherit; }
+.pb-list-copy { font-family: inherit; font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 5px; border: 1px solid rgba(99,102,241,0.2); background: var(--indigo-xxl); color: var(--indigo); cursor: pointer; flex-shrink: 0; transition: var(--transition); }
+.pb-list-copy:hover { background: var(--indigo); color: #fff; }
+.pb-list-copy.copied { background: var(--green-l); color: var(--green-d); }
+.pb-list-edit { font-family: inherit; font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 5px; border: 1px solid var(--border2); background: var(--surface2); color: var(--text2); cursor: pointer; flex-shrink: 0; transition: var(--transition); }
+.pb-list-edit:hover { background: var(--indigo-xxl); color: var(--indigo); }
+
+/* ─── ALPHABET JUMP BAR ───────────────────────────────────────────── */
+.alpha-btn {
+  font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 700;
+  padding: 3px 7px; border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--surface2); color: var(--indigo);
+  cursor: pointer; transition: var(--transition); line-height: 1.4;
+}
+.alpha-btn:hover { background: var(--indigo); color: #fff; border-color: var(--indigo); }
+.alpha-btn.disabled { color: var(--text3); background: transparent; border-color: transparent; cursor: default; }
+.alpha-btn.disabled:hover { background: transparent; color: var(--text3); border-color: transparent; }
+
+
+/* ─── DB LOADING OVERLAY ──────────────────────────────────────────── */
+#dbOverlay {
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(240,244,255,0.85); backdrop-filter: blur(8px);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+}
+#dbOverlay.hidden { display: none; }
+.db-spinner {
+  width: 44px; height: 44px; border-radius: 50%;
+  border: 3px solid var(--indigo-xl);
+  border-top-color: var(--indigo);
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.db-msg { font-size: 14px; font-weight: 500; color: var(--indigo); }
+.db-sub { font-size: 12px; color: var(--text3); }
+
+/* ─── SYNC STATUS INDICATOR ───────────────────────────────────────── */
+#syncStatus {
+  font-size: 11px; font-weight: 500; padding: 4px 12px; border-radius: 20px;
+  display: inline-flex; align-items: center; gap: 5px; transition: all 0.3s;
+}
+#syncStatus.syncing { background: var(--amber-l); color: var(--amber-d); }
+#syncStatus.synced  { background: var(--green-l);  color: var(--green-d); }
+#syncStatus.error   { background: var(--red-l);    color: var(--red); }
+.sync-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.sync-dot.pulse { animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+
+/* ─── PHONEBOOK 4-COL GRID ────────────────────────────────────────── */
+.pb-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+@media (max-width: 700px) { .pb-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 420px) { .pb-grid { grid-template-columns: 1fr; } }
+
+/* ─── PHONEBOOK CARD (new style) ──────────────────────────────────── */
+.pb-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 14px 10px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  transition: var(--transition);
+  animation: fadeUp 0.2s ease both;
+  cursor: default;
+}
+.pb-card:hover {
+  border-color: rgba(99,102,241,0.3);
+  box-shadow: 0 6px 24px rgba(99,102,241,0.13);
+  transform: translateY(-2px);
+}
+.pb-card-status {
+  position: absolute; top: 12px; right: 12px;
+  font-size: 9px; font-weight: 700; padding: 3px 9px;
+  border-radius: 20px; letter-spacing: 0.03em;
+}
+.pb-card-chk {
+  position: absolute; top: 12px; left: 12px;
+  width: 16px; height: 16px;
+  accent-color: var(--indigo); cursor: pointer;
+}
+.pb-card-av {
+  width: 48px; height: 48px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; letter-spacing: -0.5px;
+  margin-bottom: 10px; margin-top: 4px;
+  flex-shrink: 0;
+}
+.pb-card-name {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+.pb-card-email {
+  font-size: 10px; color: var(--indigo-l);
+  font-family: 'DM Mono', monospace;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 10px;
+}
+.pb-card-email.missing { color: var(--text3); font-style: italic; font-family: inherit; }
+.pb-card-actions {
+  display: flex; align-items: center; gap: 0;
+  border-top: 1px solid var(--border);
+  margin: 0 -14px; padding: 6px 10px 0;
+}
+.pb-card-btn {
+  flex: 1; font-family: inherit; font-size: 11px; font-weight: 500;
+  color: var(--text3); background: transparent; border: none;
+  cursor: pointer; padding: 4px 2px;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  border-radius: 6px; transition: var(--transition);
+}
+.pb-card-btn:hover { color: var(--indigo); background: var(--indigo-xxl); }
+.pb-card-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
+.pb-card-sep { width: 1px; height: 16px; background: var(--border); flex-shrink: 0; }
+
+/* ─── ADMIN PIN MODAL ─────────────────────────────────────────────── */
+#pinOverlay {
+  position: fixed; inset: 0; z-index: 600;
+  background: rgba(15,15,35,0.55);
+  backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.22s;
+}
+#pinOverlay.open { opacity: 1; pointer-events: auto; }
+.pin-modal {
+  background: #fff;
+  border-radius: 20px;
+  padding: 32px 28px 24px;
+  width: 320px;
+  box-shadow: 0 24px 64px rgba(99,102,241,0.22), 0 4px 16px rgba(0,0,0,0.1);
+  text-align: center;
+  transform: scale(0.94) translateY(8px);
+  transition: transform 0.22s cubic-bezier(.4,0,.2,1);
+}
+#pinOverlay.open .pin-modal { transform: scale(1) translateY(0); }
+.pin-lock-icon {
+  width: 52px; height: 52px; border-radius: 16px;
+  background: linear-gradient(135deg, #4F46E5, #7C3AED);
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 16px;
+  box-shadow: 0 4px 16px rgba(99,102,241,0.35);
+}
+.pin-title { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 5px; }
+.pin-subtitle { font-size: 12px; color: var(--text3); margin-bottom: 22px; }
+.pin-dots {
+  display: flex; gap: 10px; justify-content: center; margin-bottom: 18px;
+}
+.pin-dot {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid var(--border2);
+  background: transparent;
+  transition: all 0.15s;
+}
+.pin-dot.filled { background: var(--indigo); border-color: var(--indigo); }
+.pin-dot.error  { background: var(--red); border-color: var(--red); animation: pinShake 0.35s ease; }
+.pin-numpad {
+  display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 16px;
+}
+.pin-key {
+  font-family: inherit; font-size: 18px; font-weight: 600;
+  padding: 14px 0; border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border2);
+  background: var(--indigo-xxl); color: var(--text);
+  cursor: pointer; transition: var(--transition);
+  user-select: none;
+}
+.pin-key:hover  { background: var(--indigo-xl); border-color: var(--indigo-l); transform: translateY(-1px); }
+.pin-key:active { transform: translateY(0); background: var(--indigo); color: #fff; }
+.pin-key.del    { font-size: 14px; color: var(--text3); }
+.pin-key.del:hover { color: var(--red); border-color: rgba(220,38,38,0.25); background: var(--red-l); }
+.pin-cancel { font-family: inherit; font-size: 12px; font-weight: 500; color: var(--text3); background: none; border: none; cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: var(--transition); }
+.pin-cancel:hover { color: var(--red); background: var(--red-l); }
+.pin-error-msg { font-size: 12px; color: var(--red); min-height: 16px; margin-bottom: 8px; }
+@keyframes pinShake {
+  0%,100% { transform: translateX(0); }
+  20%      { transform: translateX(-5px); }
+  40%      { transform: translateX(5px); }
+  60%      { transform: translateX(-4px); }
+  80%      { transform: translateX(4px); }
+}
+/* Admin badge in topbar */
+.admin-badge {
+  font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: 20px;
+  border: 1.5px solid; cursor: pointer; transition: var(--transition);
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: inherit;
+}
+.admin-badge.locked   { background: var(--slate-l); color: var(--slate-d); border-color: rgba(71,85,105,0.25); }
+.admin-badge.unlocked { background: var(--green-l);  color: var(--green-d); border-color: rgba(22,163,74,0.3); }
+.admin-badge:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+
+/* ─── AVATAR COLOR PALETTE (more variety) ─────────────────────────── */
+.av-c0  { background: #fef3c7; color: #92400e; }
+.av-c1  { background: #dbeafe; color: #1e40af; }
+.av-c2  { background: #fce7f3; color: #9d174d; }
+.av-c3  { background: #d1fae5; color: #065f46; }
+.av-c4  { background: #ede9fe; color: #5b21b6; }
+.av-c5  { background: #fee2e2; color: #991b1b; }
+.av-c6  { background: #e0f2fe; color: #0c4a6e; }
+.av-c7  { background: #fef9c3; color: #713f12; }
+.av-c8  { background: #f0fdf4; color: #14532d; }
+.av-c9  { background: #fff7ed; color: #7c2d12; }
+.av-c10 { background: #f5f3ff; color: #4c1d95; }
+.av-c11 { background: #fdf2f8; color: #831843; }
+
 </style>
 </head>
 <body>
 
 <!-- ─── TOPBAR ──────────────────────────────────────── -->
+<!-- ─── DB LOADING OVERLAY ─────────────────────────── -->
+<div id="dbOverlay">
+  <div class="db-spinner"></div>
+  <div class="db-msg">Connecting to database…</div>
+  <div class="db-sub">Fetching contacts from Supabase</div>
+</div>
+
 <header class="topbar">
   <div class="logo">
     <div class="logo-icon">
@@ -380,10 +749,18 @@ body {
     </div>
   </div>
   <div class="topbar-actions">
-    <span class="count-pill" id="countPill">93 contacts</span>
-    <button class="btn" onclick="triggerImport()">⬆ Import Excel</button>
+    <span class="count-pill" id="countPill">0 contacts</span>
+    <span id="syncStatus" class="syncing"><span class="sync-dot pulse"></span>Connecting…</span>
+    <!-- Search / Phonebook mode toggle -->
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="modeSearch" onclick="setMode('search')">🔍 Search</button>
+      <button class="mode-btn" id="modePhonebook" onclick="setMode('phonebook')">📖 Phonebook</button>
+    </div>
+    <button class="btn" onclick="requireAdmin(triggerImport)">⬆ Import Excel</button>
     <button class="btn" onclick="exportContacts()">⬇ Export</button>
-    <button class="btn accent" onclick="openAddModal()">+ Add Contact</button>
+    <button class="btn danger" onclick="requireAdmin(clearAllData)" title="Clear all contacts from storage">🗑 Clear All</button>
+    <button class="btn accent" onclick="requireAdmin(openAddModal)">+ Add Contact</button>
+    <button class="admin-badge locked" id="adminBadge" onclick="toggleAdmin()" title="Admin mode">🔒 Admin</button>
     <input type="file" id="fileInput" accept=".xlsx,.xlsm,.csv" style="display:none" onchange="handleImport(event)"/>
   </div>
 </header>
@@ -391,40 +768,80 @@ body {
 <!-- ─── MAIN ────────────────────────────────────────── -->
 <main class="main">
 
-  <!-- Search -->
-  <div class="search-wrap">
-    <span class="search-icon">
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-        <circle cx="7.5" cy="7.5" r="5" stroke="#818cf8" stroke-width="1.7"/>
-        <path d="M11.5 11.5L15 15" stroke="#818cf8" stroke-width="1.7" stroke-linecap="round"/>
-      </svg>
-    </span>
-    <input id="searchInput" type="text" placeholder="Search by name or email…" autocomplete="off"
-      oninput="onSearch()" onkeydown="onKeyDown(event)" onfocus="onFocus()" onblur="onBlur()"/>
-    <button class="search-clear" id="clearBtn" onclick="clearSearch()" title="Clear">✕</button>
+  <!-- Search panel (hidden in Phonebook mode) -->
+  <div id="searchPanel">
+    <div class="search-wrap">
+      <span class="search-icon">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <circle cx="7.5" cy="7.5" r="5" stroke="#818cf8" stroke-width="1.7"/>
+          <path d="M11.5 11.5L15 15" stroke="#818cf8" stroke-width="1.7" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <input id="searchInput" type="text" placeholder="Search by name or email…" autocomplete="off"
+        oninput="onSearch()" onkeydown="onKeyDown(event)" onfocus="onFocus()" onblur="onBlur()"/>
+      <button class="search-clear" id="clearBtn" onclick="clearSearch()" title="Clear">✕</button>
+    </div>
+
+    <div class="search-meta">
+      <span class="search-hint">Type to search · <span class="kbd">↑↓</span> navigate · <span class="kbd">↵</span> select · <span class="kbd">Esc</span> close</span>
+    </div>
+
+    <!-- Recent searches -->
+    <div class="recent-row" id="recentRow" style="display:none">
+      <span class="recent-label">Recent:</span>
+      <span id="recentTags"></span>
+    </div>
+
+    <!-- Dropdown -->
+    <div class="dropdown-wrap">
+      <div id="dropdown"></div>
+    </div>
+
+    <!-- Filter chips -->
+    <div class="chips">
+      <button class="chip active" data-filter="all"          onclick="setFilter('all',this)">All</button>
+      <button class="chip"        data-filter="Active"       onclick="setFilter('Active',this)">Active</button>
+      <button class="chip"        data-filter="Replaced"     onclick="setFilter('Replaced',this)">Replaced</button>
+      <button class="chip"        data-filter="Deactivated"  onclick="setFilter('Deactivated',this)">Deactivated</button>
+      <button class="chip"        data-filter="missing"      onclick="setFilter('missing',this)">Missing Email</button>
+    </div>
   </div>
 
-  <div class="search-meta">
-    <span class="search-hint">Min 3 chars · <span class="kbd">↑↓</span> navigate · <span class="kbd">↵</span> select · <span class="kbd">Esc</span> close</span>
+  <!-- Phonebook controls panel -->
+  <div id="phonebookPanel" style="display:none;margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <!-- Status filter chips for phonebook -->
+      <span style="font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.05em">Filter:</span>
+      <button class="chip active" id="pb-chip-all"         onclick="setPbFilter('all',this)">All</button>
+      <button class="chip"        id="pb-chip-Active"      onclick="setPbFilter('Active',this)">Active</button>
+      <button class="chip"        id="pb-chip-Replaced"    onclick="setPbFilter('Replaced',this)">Replaced</button>
+      <button class="chip"        id="pb-chip-Deactivated" onclick="setPbFilter('Deactivated',this)">Deactivated</button>
+      <button class="chip"        id="pb-chip-missing"     onclick="setPbFilter('missing',this)">Missing Email</button>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+        <!-- Sort -->
+        <select id="pbSort" onchange="renderResults()" style="font-family:inherit;font-size:11px;font-weight:500;padding:5px 10px;border-radius:20px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;outline:none">
+          <option value="az">A → Z</option>
+          <option value="za">Z → A</option>
+          <option value="status">By Status</option>
+        </select>
+        <!-- View toggle -->
+        <div class="mode-toggle" style="gap:1px;padding:2px">
+          <button class="mode-btn"        id="pbViewCard" onclick="setPbView('card')" title="Card view">⊞ Cards</button>
+          <button class="mode-btn active" id="pbViewList" onclick="setPbView('list')" title="Compact list">☰ List</button>
+        </div>
+      </div>
+    </div>
+    <!-- Alphabet jump bar -->
+    <div id="alphabetBar" style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:4px"></div>
   </div>
 
-  <!-- Recent searches -->
-  <div class="recent-row" id="recentRow" style="display:none">
-    <span class="recent-label">Recent:</span>
-    <span id="recentTags"></span>
-  </div>
-
-  <!-- Dropdown -->
-  <div class="dropdown-wrap">
-    <div id="dropdown"></div>
-  </div>
-
-  <!-- Filter chips -->
-  <div class="chips">
-    <button class="chip active" data-filter="all"          onclick="setFilter('all',this)">All</button>
-    <button class="chip"        data-filter="Active"       onclick="setFilter('Active',this)">Active</button>
-    <button class="chip"        data-filter="Replaced"     onclick="setFilter('Replaced',this)">Replaced</button>
-    <button class="chip"        data-filter="missing"      onclick="setFilter('missing',this)">Missing Email</button>
+  <!-- Select-all row (shown when multi-select is active) -->
+  <div class="select-all-row" id="selectAllRow">
+    <label>
+      <input type="checkbox" id="selectAllChk" onchange="toggleSelectAll(this.checked)"/>
+      Select All Visible
+    </label>
+    <span class="sel-count" id="selCount">0 selected</span>
   </div>
 
   <!-- Results -->
@@ -433,6 +850,22 @@ body {
   </div>
   <div id="results"></div>
 </main>
+
+<!-- ─── FLOATING BULK ACTION BAR ────────────────────── -->
+<div id="bulkBar">
+  <span class="bulk-count" id="bulkCount">0 selected</span>
+  <div class="bulk-sep"></div>
+  <select class="bulk-status-select" id="bulkStatusSelect">
+    <option value="">Change status…</option>
+    <option value="Active">→ Active</option>
+    <option value="Replaced">→ Replaced</option>
+    <option value="Deactivated">→ Deactivated</option>
+  </select>
+  <button class="btn accent" onclick="requireAdmin(applyBulkStatus)" style="font-size:11px;padding:6px 14px">Apply</button>
+  <div class="bulk-sep"></div>
+  <button class="btn danger" onclick="requireAdmin(bulkDelete)" style="font-size:11px;padding:6px 14px">🗑 Delete</button>
+  <button class="btn" onclick="clearSelection()" style="font-size:11px;padding:6px 14px;color:var(--text3)">✕ Clear</button>
+</div>
 
 <!-- ─── TOAST ───────────────────────────────────────── -->
 <div id="toast">
@@ -457,6 +890,7 @@ body {
       <select class="form-select" id="f-status" onchange="toggleReplaced()">
         <option value="Active">Active</option>
         <option value="Replaced">Replaced</option>
+        <option value="Deactivated">Deactivated</option>
       </select>
     </div>
     <div id="replaced-fields" style="display:none">
@@ -470,7 +904,7 @@ body {
       </div>
     </div>
     <div class="modal-actions">
-      <button class="btn danger" id="deleteBtn" style="display:none;margin-right:auto" onclick="deleteContact()">Delete</button>
+      <button class="btn danger" id="deleteBtn" style="display:none;margin-right:auto" onclick="requireAdmin(deleteContact)">Delete</button>
       <button class="btn" onclick="closeModalDirect()">Cancel</button>
       <button class="btn accent" onclick="saveContact()">Save Contact</button>
     </div>
@@ -479,64 +913,420 @@ body {
 
 <!-- ─── IMPORT PREVIEW MODAL ─────────────────────────── -->
 <div class="modal-overlay" id="previewOverlay" onclick="closePreview(event)">
-  <div class="modal" onclick="event.stopPropagation()" style="max-width:640px">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:680px">
     <div class="modal-title">Import Preview</div>
     <p style="font-size:13px;color:var(--text3);margin-bottom:4px" id="previewInfo"></p>
     <div class="preview-table-wrap" id="previewTableWrap"></div>
-    <div class="modal-actions">
-      <button class="btn" onclick="closePreviewDirect()">Cancel</button>
-      <button class="btn accent" onclick="confirmImport()">Import All</button>
+    <div class="modal-actions" style="justify-content:space-between;align-items:center">
+      <span style="font-size:12px;color:var(--text3)">
+        Selected: <strong id="previewSelLabel" style="color:var(--indigo)">0</strong>
+      </span>
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="closePreviewDirect()">Cancel</button>
+        <button class="btn accent" onclick="requireAdmin(confirmImport)">Import Selected</button>
+      </div>
     </div>
   </div>
 </div>
 
+<!-- ─── DUPLICATE RESOLUTION MODAL ───────────────────── -->
+<div class="modal-overlay" id="dupOverlay">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
+    <div class="modal-title">Duplicate Contact Found</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px" id="dupDesc"></p>
+    <div class="dup-option" onclick="resolveDup('keep')">
+      <div class="dup-option-icon">📌</div>
+      <div>
+        <div class="dup-option-title">Keep Existing</div>
+        <div class="dup-option-desc">Ignore the incoming contact — keep what's already saved.</div>
+      </div>
+    </div>
+    <div class="dup-option" onclick="resolveDup('replace')">
+      <div class="dup-option-icon">🔄</div>
+      <div>
+        <div class="dup-option-title">Replace Existing</div>
+        <div class="dup-option-desc">Overwrite the saved contact with the incoming data.</div>
+      </div>
+    </div>
+    <div class="dup-option" onclick="resolveDup('both')">
+      <div class="dup-option-icon">➕</div>
+      <div>
+        <div class="dup-option-title">Keep Both</div>
+        <div class="dup-option-desc">Add the incoming contact alongside the existing one.</div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="resolveDup('skip')">Skip All Remaining</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── ADMIN PIN MODAL ──────────────────────────────── -->
+<div id="pinOverlay">
+  <div class="pin-modal">
+    <div class="pin-lock-icon">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+        <rect x="5" y="11" width="14" height="10" rx="2" fill="white" opacity="0.95"/>
+        <path d="M8 11V7a4 4 0 0 1 8 0v4" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="12" cy="16" r="1.5" fill="#6366f1"/>
+      </svg>
+    </div>
+    <div class="pin-title">Admin Access</div>
+    <div class="pin-subtitle">Enter your 4-digit PIN to continue</div>
+    <div class="pin-dots" id="pinDots">
+      <div class="pin-dot" id="pd0"></div>
+      <div class="pin-dot" id="pd1"></div>
+      <div class="pin-dot" id="pd2"></div>
+      <div class="pin-dot" id="pd3"></div>
+    </div>
+    <div class="pin-error-msg" id="pinErrorMsg"></div>
+    <div class="pin-numpad">
+      <button class="pin-key" onclick="pinKey('1')">1</button>
+      <button class="pin-key" onclick="pinKey('2')">2</button>
+      <button class="pin-key" onclick="pinKey('3')">3</button>
+      <button class="pin-key" onclick="pinKey('4')">4</button>
+      <button class="pin-key" onclick="pinKey('5')">5</button>
+      <button class="pin-key" onclick="pinKey('6')">6</button>
+      <button class="pin-key" onclick="pinKey('7')">7</button>
+      <button class="pin-key" onclick="pinKey('8')">8</button>
+      <button class="pin-key" onclick="pinKey('9')">9</button>
+      <button class="pin-key del" onclick="pinKey('clear')" title="Clear all">✕</button>
+      <button class="pin-key" onclick="pinKey('0')">0</button>
+      <button class="pin-key del" onclick="pinKey('back')" title="Backspace">⌫</button>
+    </div>
+    <button class="pin-cancel" onclick="closePinModal()">Cancel</button>
+  </div>
+</div>
+
 <script>
-// ─── EMBEDDED DATA (from Excel) ─────────────────────────────────────
-const SEED_DATA = [{"name":"Jeannie Smokoska","email":"","status":"Replaced","replacedBy":"LisaO'Connell","replacementEmail":"loconnell@jmpartners.com"},{"name":"John Colletta","email":"","status":"Replaced","replacedBy":"LisaO'Connell","replacementEmail":"loconnell@jmpartners.com"},{"name":"Josseline Silber","email":"jsilber@jmpartners.com","status":"Replaced","replacedBy":"Sydney Cory","replacementEmail":""},{"name":"Karen Marquis","email":"","status":"Replaced","replacedBy":"MyraGrant","replacementEmail":"mgrant@jmpartners.com"},{"name":"Kayla Pryse","email":"kpryse@jmpartners.com","status":"Replaced","replacedBy":"Carley Sommer","replacementEmail":"csommer@jmpartners.com"},{"name":"Ruth Kelly","email":"rkelly@jmpartners.com","status":"Replaced","replacedBy":"KyleMagenheimer","replacementEmail":"kmagenheimer@jmpartners.com"},{"name":"Elenia Aguayo","email":"eaguayo@jmpartners.com","status":"Replaced","replacedBy":"Briauna Bonilla","replacementEmail":"bmbonilla@jmpartners.com"},{"name":"Abriana Delgado","email":"adelgado@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Adam Festge","email":"afestge@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Alyssa Nielson","email":"anielson@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Amanda Runyan (Schaeffer)","email":"aschaeffer@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Ana Alberro","email":"aalberro@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Andrea Herrera","email":"aherrera@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Angela Dektor","email":"adektor@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Angela Zayas","email":"azayas@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Angie Abbott","email":"aabbott@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Angie Fajardo","email":"afajardo@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Ashley Johnson","email":"asjohnson@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Beth Carroll","email":"bcarroll@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Brian Dougherty","email":"bdougherty@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Brian McCluskey","email":"bmccluskey@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Casey McCluskey","email":"cmccluskey@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Carley Sommer","email":"csommer@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Cary Garcia-Riley","email":"cgarcia-riley@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Chad Smith","email":"chasmith@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Courtney Brecke","email":"cbrecke@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"David Wexler","email":"dwexler@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Diana Booth","email":"dbooth@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Erika Wexler","email":"ewexler@jmparners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Erin Kahl","email":"ekahl@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Gary Wasserman","email":"gwasserman@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Gini Fajardo","email":"gfajardo@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Gloria Figueiredo","email":"gfigueiredo@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Hervin Garcia","email":"hgarcia@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Howard Baker","email":"hbaker@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Jacob Johnson","email":"jajohnson@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Jacob Wasserman","email":"jwasserman@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"James Colyer","email":"jcolyer@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Jessica Winker","email":"jwinkler@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Jordan Wasserman","email":"jmwasserman@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Jordan Yehnert","email":"jyehnert@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Jorge Rocha","email":"jrocha@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Jose Rodriguez","email":"jorodriguez@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Judy Upton","email":"jupton@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Julissa Pineda","email":"jpineda@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Kayla Richendifer","email":"krichendifer@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Karen Fanelli","email":"kfanelli@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Karla Csonka","email":"kcsonka@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Krista Peterson","email":"kpeterson@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Kyle Magenheimer","email":"kmagenheimer@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Laura Dwyer","email":"ldwyer@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Lauri Bennett","email":"lbennett@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Leonard Flores","email":"lflores@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Lisa O'Connell","email":"loconnell@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Lisa Rivera","email":"lrivera@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Lisa Zingler","email":"lzingler@jpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Lydis Chico","email":"lchico@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Lucas Skerven","email":"lskerven@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Marc Skulnick","email":"mskulnick@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Marianne Belvick","email":"mbelvick@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Mark DiGiamberdini","email":"mdigiamberdini@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Melissa Jennings","email":"mjennings@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Michelle Woodard","email":"mwoodard@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Minelia Manrique","email":"mmanrique@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Myra Grant","email":"mgrant@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Nick Spendley","email":"nspendley@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Orit Manham","email":"omanham@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Pam Hill","email":"phill@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Patricia De Leon","email":"pdeleon@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Patsy Pernia","email":"ppernia@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Paul Isaac","email":"pissac@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Pinchas Schechter","email":"pschnecter@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Regina Addeo","email":"raddeo@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Regina Feehan","email":"rfeehan@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Rhea Van Hook","email":"rvanhook@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Rick Franchi","email":"rfranchi@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Robert Harbour","email":"rharbour@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Ronnie Weissmark","email":"rweissmark@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Ryan Dolfi","email":"rdolfi@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Samantha Kuhlka","email":"skuhlka@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Seth Dolfi","email":"sdolfi@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Shayna Citron","email":"scitron@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Stark Harbour","email":"sharbiur@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Stephanie Scriber","email":"sscriber@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Steven Wexler","email":"swexler@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Sue Tatro","email":"statro@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Suzanne Gauthier","email":"sgauther@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Tyler Milrot","email":"tmilrot@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Teresa Parsons","email":"tparsons@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Victoria Edwards","email":"vedwards@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Yuliet Arevalo","email":"yarevalo@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""},{"name":"Yvette Martinez","email":"ymartinez@jmpartners.com","status":"Active","replacedBy":"","replacementEmail":""}];
+// ═══════════════════════════════════════════════════════════════════
+//  SUPABASE CONFIG
+// ═══════════════════════════════════════════════════════════════════
+const SUPABASE_URL = 'https://jtccsuttxisxygfrvtpa.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0Y2NzdXR0eGlzeHlnZnJ2dHBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczNzI0MDAsImV4cCI6MjA5Mjk0ODQwMH0.Ld3oS9NOCYTtou1v-4_sjCw9PzKrSM7sC5Mdq0sXMDk';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ─── STATE ──────────────────────────────────────────────────────────
-let contacts = [];
-let currentFilter = 'all';
-let currentQuery  = '';
-let dropFocusIdx  = -1;
-let dropItems     = [];
-let recentSearches = [];
-let editingIdx    = null;
-let pendingImport = null;
-let toastTimer    = null;
+// ═══════════════════════════════════════════════════════════════════
+//  ADMIN PIN  (change '1234' to your preferred PIN)
+// ═══════════════════════════════════════════════════════════════════
+const ADMIN_PIN = '2444';
+let isAdminUnlocked    = false;
+let pendingAdminAction = null;
+let pinBuffer          = '';
 
-// ─── INIT ────────────────────────────────────────────────────────────
-function init() {
-  const saved = localStorage.getItem('jm_contacts');
-  contacts = saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(SEED_DATA));
-  const savedRecent = localStorage.getItem('jm_recent');
-  recentSearches = savedRecent ? JSON.parse(savedRecent) : [];
+function requireAdmin(action) {
+  if (isAdminUnlocked) { action(); return; }
+  pendingAdminAction = action;
+  openPinModal();
+}
+
+function toggleAdmin() {
+  if (isAdminUnlocked) {
+    isAdminUnlocked = false;
+    updateAdminBadge();
+    showToast('Admin mode locked');
+  } else {
+    pendingAdminAction = null;
+    openPinModal();
+  }
+}
+
+function openPinModal() {
+  pinBuffer = '';
+  updatePinDots();
+  document.getElementById('pinErrorMsg').textContent = '';
+  document.getElementById('pinOverlay').classList.add('open');
+}
+
+function closePinModal() {
+  document.getElementById('pinOverlay').classList.remove('open');
+  pinBuffer = '';
+  pendingAdminAction = null;
+  updatePinDots();
+}
+
+function pinKey(k) {
+  document.getElementById('pinErrorMsg').textContent = '';
+  if (k === 'back')  { pinBuffer = pinBuffer.slice(0, -1); updatePinDots(); return; }
+  if (k === 'clear') { pinBuffer = ''; updatePinDots(); return; }
+  if (pinBuffer.length >= 4) return;
+  pinBuffer += k;
+  updatePinDots();
+  if (pinBuffer.length === 4) setTimeout(checkPin, 120);
+}
+
+function updatePinDots() {
+  for (let i = 0; i < 4; i++) {
+    const dot = document.getElementById('pd' + i);
+    dot.classList.toggle('filled', i < pinBuffer.length);
+    dot.classList.remove('error');
+  }
+}
+
+function checkPin() {
+  if (pinBuffer === ADMIN_PIN) {
+    isAdminUnlocked = true;
+    updateAdminBadge();
+    document.getElementById('pinOverlay').classList.remove('open');
+    showToast('Admin mode unlocked 🔓');
+    if (pendingAdminAction) {
+      const fn = pendingAdminAction;
+      pendingAdminAction = null;
+      fn();
+    }
+  } else {
+    for (let i = 0; i < 4; i++) document.getElementById('pd' + i).classList.add('error');
+    document.getElementById('pinErrorMsg').textContent = 'Incorrect PIN — try again';
+    pinBuffer = '';
+    setTimeout(updatePinDots, 650);
+  }
+}
+
+function updateAdminBadge() {
+  const badge = document.getElementById('adminBadge');
+  if (isAdminUnlocked) {
+    badge.className = 'admin-badge unlocked';
+    badge.innerHTML = '🔓 Admin';
+    badge.title = 'Admin mode ON — click to lock';
+  } else {
+    badge.className = 'admin-badge locked';
+    badge.innerHTML = '🔒 Admin';
+    badge.title = 'Click to unlock admin mode';
+  }
+}
+
+document.addEventListener('keydown', function(e) {
+  if (!document.getElementById('pinOverlay').classList.contains('open')) return;
+  if (e.key >= '0' && e.key <= '9') pinKey(e.key);
+  else if (e.key === 'Backspace') { e.preventDefault(); pinKey('back'); }
+  else if (e.key === 'Escape') closePinModal();
+  else if (e.key === 'Delete') pinKey('clear');
+});
+
+
+
+// ═══════════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════════
+let contacts        = [];          // local cache (objects with .id from Supabase)
+let currentFilter   = 'all';
+let currentQuery    = '';
+let currentMode     = 'search';
+let pbFilter        = 'all';
+let pbView          = 'list';
+let dropFocusIdx    = -1;
+let dropItems       = [];
+let recentSearches  = [];
+let editingIdx      = null;        // index into contacts[] while editing
+let pendingImport   = null;
+let previewSelected = new Set();
+let selectedContacts= new Set();
+let toastTimer      = null;
+let dupQueue        = [];
+let _dupResolveCallback = null;
+
+// ═══════════════════════════════════════════════════════════════════
+//  SUPABASE HELPERS
+// ═══════════════════════════════════════════════════════════════════
+function setSyncStatus(state, msg) {
+  const el = document.getElementById('syncStatus');
+  if (!el) return;
+  el.className = 'syncStatus ' + state;
+  const dot = state === 'syncing' ? '<span class="sync-dot pulse"></span>' : '<span class="sync-dot"></span>';
+  el.innerHTML = dot + msg;
+}
+
+// Map DB row → local contact object
+function rowToContact(r) {
+  return {
+    id:               r.id,
+    name:             r.name             || '',
+    email:            r.email            || '',
+    status:           r.status           || 'Active',
+    replacedBy:       r.replaced_by      || '',
+    replacementEmail: r.replacement_email|| '',
+  };
+}
+
+// Map local contact object → DB row (no id field for inserts)
+function contactToRow(c) {
+  return {
+    name:              c.name             || null,
+    email:             c.email            || null,
+    status:            c.status           || 'Active',
+    replaced_by:       c.replacedBy       || null,
+    replacement_email: c.replacementEmail || null,
+    updated_at:        new Date().toISOString(),
+  };
+}
+
+// ─── FETCH ALL ────────────────────────────────────────────────────
+async function fetchAll() {
+  setSyncStatus('syncing', 'Loading…');
+  const { data, error } = await sb.from('contacts').select('*').order('name');
+  if (error) {
+    setSyncStatus('error', 'DB Error');
+    showToast('Failed to load contacts: ' + error.message);
+    return;
+  }
+  contacts = data.map(rowToContact);
   updateCount();
   renderResults();
+  setSyncStatus('synced', contacts.length + ' contacts');
+  document.getElementById('dbOverlay').classList.add('hidden');
 }
 
-function save() {
-  localStorage.setItem('jm_contacts', JSON.stringify(contacts));
+// ─── INSERT ONE ───────────────────────────────────────────────────
+async function dbInsert(c) {
+  setSyncStatus('syncing', 'Saving…');
+  const row = contactToRow(c);
+  const { data, error } = await sb.from('contacts').insert(row).select().single();
+  if (error) {
+    setSyncStatus('error', 'Save failed');
+    showToast('Error saving: ' + error.message);
+    return null;
+  }
+  setSyncStatus('synced', 'Saved ✓');
+  return rowToContact(data);
 }
+
+// ─── UPDATE ONE (by Supabase id) ─────────────────────────────────
+async function dbUpdate(c) {
+  setSyncStatus('syncing', 'Updating…');
+  const row = contactToRow(c);
+  const { error } = await sb.from('contacts').update(row).eq('id', c.id);
+  if (error) {
+    setSyncStatus('error', 'Update failed');
+    showToast('Error updating: ' + error.message);
+    return false;
+  }
+  setSyncStatus('synced', 'Updated ✓');
+  return true;
+}
+
+// ─── DELETE ONE (by Supabase id) ─────────────────────────────────
+async function dbDelete(id) {
+  setSyncStatus('syncing', 'Deleting…');
+  const { error } = await sb.from('contacts').delete().eq('id', id);
+  if (error) {
+    setSyncStatus('error', 'Delete failed');
+    showToast('Error deleting: ' + error.message);
+    return false;
+  }
+  setSyncStatus('synced', 'Deleted ✓');
+  return true;
+}
+
+// ─── UPSERT MANY (import) — email is unique key ───────────────────
+// Returns { inserted, updated, errors }
+async function dbUpsertMany(rows) {
+  setSyncStatus('syncing', 'Importing…');
+  // Use email as conflict target when present; otherwise plain insert
+  const withEmail    = rows.filter(r => r.email);
+  const withoutEmail = rows.filter(r => !r.email);
+  let inserted = 0, updated = 0, errors = 0;
+
+  if (withEmail.length) {
+    const { data, error } = await sb.from('contacts')
+      .upsert(withEmail, { onConflict: 'email', ignoreDuplicates: false })
+      .select();
+    if (error) { errors += withEmail.length; showToast('Upsert error: ' + error.message); }
+    else { inserted += data.length; }
+  }
+  if (withoutEmail.length) {
+    const { data, error } = await sb.from('contacts').insert(withoutEmail).select();
+    if (error) { errors += withoutEmail.length; }
+    else { inserted += data.length; }
+  }
+  return { inserted, updated, errors };
+}
+
+// ─── DELETE ALL ───────────────────────────────────────────────────
+async function dbDeleteAll() {
+  setSyncStatus('syncing', 'Clearing…');
+  const { error } = await sb.from('contacts').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  if (error) { setSyncStatus('error', 'Clear failed'); showToast('Error: ' + error.message); return false; }
+  setSyncStatus('synced', '0 contacts');
+  return true;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════════
+async function init() {
+  const savedRecent = localStorage.getItem('jm_recent');
+  recentSearches = savedRecent ? JSON.parse(savedRecent) : [];
+  await fetchAll();
+}
+
 function saveRecent() {
   localStorage.setItem('jm_recent', JSON.stringify(recentSearches));
 }
+
 function updateCount() {
-  const unique = dedupe(contacts).length;
-  document.getElementById('countPill').textContent = unique + ' contacts';
+  const n = contacts.length;
+  document.getElementById('countPill').textContent = n + ' contact' + (n === 1 ? '' : 's');
+  setSyncStatus('synced', n + ' contacts');
 }
 
-// ─── DEDUP ───────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+//  MODE TOGGLE
+// ═══════════════════════════════════════════════════════════════════
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('modeSearch').classList.toggle('active', mode === 'search');
+  document.getElementById('modePhonebook').classList.toggle('active', mode === 'phonebook');
+  document.getElementById('searchPanel').style.display     = mode === 'search'    ? '' : 'none';
+  document.getElementById('phonebookPanel').style.display  = mode === 'phonebook' ? '' : 'none';
+  clearSelection();
+  renderResults();
+}
+
+function setPbFilter(filter, btn) {
+  pbFilter = filter;
+  document.querySelectorAll('#phonebookPanel .chip').forEach(c => c.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderResults();
+}
+
+function setPbView(view) {
+  pbView = view;
+  document.getElementById('pbViewCard').classList.toggle('active', view === 'card');
+  document.getElementById('pbViewList').classList.toggle('active', view === 'list');
+  renderResults();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DEDUPE (local, for display only — DB enforces email uniqueness)
+// ═══════════════════════════════════════════════════════════════════
 function dedupe(arr) {
   const seen = new Set();
   return arr.filter(c => {
-    const key = c.name.toLowerCase().trim();
+    // Prefer email as unique key; fall back to name
+    const key = c.email ? c.email.toLowerCase() : ('name:' + c.name.toLowerCase().trim());
     if (seen.has(key)) return false;
     seen.add(key); return true;
   });
 }
 
-// ─── AVATAR INITIALS ──────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+//  EMAIL-BASED DUPLICATE DETECTION
+// ═══════════════════════════════════════════════════════════════════
+function findDuplicate(email, name) {
+  const normEmail = (email || '').toLowerCase().trim();
+  const normName  = (name  || '').toLowerCase().trim();
+  // Email match takes priority
+  if (normEmail) {
+    const byEmail = contacts.findIndex(c => c.email && c.email.toLowerCase() === normEmail);
+    if (byEmail !== -1) return byEmail;
+  }
+  // Fallback: name match (only for no-email contacts)
+  return contacts.findIndex(c => !c.email && c.name.toLowerCase().trim() === normName);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  AVATAR HELPERS
+// ═══════════════════════════════════════════════════════════════════
 function initials(name) {
   if (!name) return '?';
   const parts = name.trim().split(/\s+/);
@@ -544,15 +1334,17 @@ function initials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-// ─── AVATAR COLOR ────────────────────────────────────────────────────
 const AV_COLORS = ['av-indigo','av-green','av-amber'];
-function avatarColor(name, forceGreen) {
-  if (forceGreen) return 'av-green';
+function avatarColor(name, status) {
+  if (status === 'Deactivated') return 'av-slate';
+  if (status === 'Replaced')    return 'av-amber';
   const i = (name || '').charCodeAt(0) % AV_COLORS.length;
   return AV_COLORS[i];
 }
 
-// ─── HIGHLIGHT MATCH ─────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+//  HIGHLIGHT & ESCAPE
+// ═══════════════════════════════════════════════════════════════════
 function highlight(text, query) {
   if (!query || !text) return escHtml(text || '');
   const idx = text.toLowerCase().indexOf(query.toLowerCase());
@@ -561,11 +1353,14 @@ function highlight(text, query) {
     + '<span class="match-hl">' + escHtml(text.slice(idx, idx + query.length)) + '</span>'
     + escHtml(text.slice(idx + query.length));
 }
+
 function escHtml(s) {
   return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ─── FUZZY SEARCH ────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+//  FUZZY SEARCH
+// ═══════════════════════════════════════════════════════════════════
 function fuzzyMatch(text, q) {
   if (!text || !q) return false;
   text = text.toLowerCase(); q = q.toLowerCase();
@@ -579,40 +1374,80 @@ function fuzzyMatch(text, q) {
   return true;
 }
 
-// ─── FILTER ──────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+//  FILTER & SEARCH
+// ═══════════════════════════════════════════════════════════════════
 function applyFilter(list) {
   if (currentFilter === 'all')     return list;
   if (currentFilter === 'missing') return list.filter(c => !c.email);
   return list.filter(c => c.status === currentFilter);
 }
 
-// ─── SEARCH LOGIC ────────────────────────────────────────────────────
 function searchContacts(q) {
   const base = dedupe(contacts);
-  if (!q || q.length < 3) return applyFilter(base);
-  const ql = q.toLowerCase();
-  return applyFilter(base).filter(c =>
-    fuzzyMatch(c.name, q) ||
-    fuzzyMatch(c.email, q) ||
-    fuzzyMatch(c.replacedBy, q) ||
-    fuzzyMatch(c.replacementEmail, q)
-  );
+  // Search first, then filter — both work independently
+  const searched = (!q || q.length < 1)
+    ? base
+    : base.filter(c =>
+        fuzzyMatch(c.name, q) ||
+        fuzzyMatch(c.email, q) ||
+        fuzzyMatch(c.replacedBy, q) ||
+        fuzzyMatch(c.replacementEmail, q)
+      );
+  return applyFilter(searched);
 }
 
-// ─── RENDER RESULTS ──────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+//  STATUS HELPERS
+// ═══════════════════════════════════════════════════════════════════
+function statusPillClass(s) {
+  if (s === 'Active')      return 'sp-active';
+  if (s === 'Replaced')    return 'sp-replaced';
+  if (s === 'Deactivated') return 'sp-deactivated';
+  return 'sp-active';
+}
+function dropBadgeClass(s) {
+  if (s === 'Active')      return 'db-active';
+  if (s === 'Replaced')    return 'db-replaced';
+  if (s === 'Deactivated') return 'db-deactivated';
+  return 'db-active';
+}
+function cardClass(s) {
+  if (s === 'Active')      return 'active-card';
+  if (s === 'Replaced')    return 'replaced-card';
+  if (s === 'Deactivated') return 'deactivated-card';
+  return 'active-card';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  RENDER DISPATCHER
+// ═══════════════════════════════════════════════════════════════════
 function renderResults() {
-  const q = currentQuery;
+  if (currentMode === 'phonebook') renderPhonebook();
+  else renderSearch();
+  updateBulkBar();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  RENDER SEARCH MODE
+// ═══════════════════════════════════════════════════════════════════
+function renderSearch() {
+  const q   = currentQuery;
   const list = searchContacts(q);
-  const el = document.getElementById('results');
+  const el  = document.getElementById('results');
   const lbl = document.getElementById('resultsLabel');
+  const selectAllRow = document.getElementById('selectAllRow');
+
+  selectAllRow.classList.toggle('visible', list.length > 0);
 
   if (!q && currentFilter === 'all') {
     lbl.textContent = '';
     el.innerHTML = `<div class="state-box">
       <div class="state-icon">🔍</div>
       <div class="state-title">Search the directory</div>
-      <div class="state-sub">Type at least 3 characters to find a contact.<br/>Use the filter chips to browse by status.</div>
+      <div class="state-sub">Type to find a contact, or use the filter chips below.</div>
     </div>`;
+    selectAllRow.classList.remove('visible');
     return;
   }
 
@@ -623,27 +1458,24 @@ function renderResults() {
       <div class="state-title">No contacts found</div>
       <div class="state-sub">${q ? 'Try a different name or email.' : 'No contacts match this filter.'}</div>
     </div>`;
+    selectAllRow.classList.remove('visible');
     return;
   }
 
-  const suffix = list.length === 1 ? 'result' : 'results';
-  lbl.textContent = q ? `${list.length} ${suffix} for "${q}"` : `${list.length} ${suffix}`;
+  lbl.textContent = q ? `${list.length} result${list.length===1?'':'s'} for "${q}"` : `${list.length} result${list.length===1?'':'s'}`;
 
-  // Group: Replaced contacts shown as pair (replacement active first, then original)
   const shown = new Set();
   const groups = [];
-
-  list.forEach((c, i) => {
+  list.forEach(c => {
     if (shown.has(c.name)) return;
     shown.add(c.name);
-
     if (c.status === 'Replaced') {
-      // Find replacement contact in full contacts list
       const repName = (c.replacedBy || '').toLowerCase().replace(/\s+/g,'');
       const repContact = dedupe(contacts).find(r =>
-        r.status === 'Active' &&
-        (r.name.toLowerCase().replace(/\s+/g,'') === repName ||
-         (c.replacementEmail && r.email && r.email.toLowerCase() === c.replacementEmail.toLowerCase()))
+        r.status === 'Active' && (
+          r.name.toLowerCase().replace(/\s+/g,'') === repName ||
+          (c.replacementEmail && r.email && r.email.toLowerCase() === c.replacementEmail.toLowerCase())
+        )
       );
       groups.push({ type: 'pair', original: c, replacement: repContact, repEmail: c.replacementEmail });
     } else {
@@ -651,25 +1483,186 @@ function renderResults() {
     }
   });
 
-  el.innerHTML = '';
+  const frag = document.createDocumentFragment();
   groups.forEach((g, gi) => {
-    const delay = gi * 0.04;
-    if (g.type === 'single') {
-      el.appendChild(buildActiveCard(g.contact, q, delay));
-    } else {
-      el.appendChild(buildPairGroup(g, q, delay));
-    }
+    const delay = Math.min(gi * 0.04, 0.6);
+    if (g.type === 'single') frag.appendChild(buildCard(g.contact, q, delay));
+    else frag.appendChild(buildPairGroup(g, q, delay));
   });
+  el.innerHTML = '';
+  el.appendChild(frag);
+  refreshSelectedState();
 }
 
-// ─── BUILD ACTIVE CARD ───────────────────────────────────────────────
-function buildActiveCard(c, q, delay) {
+// ═══════════════════════════════════════════════════════════════════
+//  RENDER PHONEBOOK MODE
+// ═══════════════════════════════════════════════════════════════════
+
+// ─── PHONEBOOK AVATAR COLOR (12-color palette) ───────────────────────
+function avatarColorPb(name) {
+  const n = (name || '').charCodeAt(0) + (name || '').charCodeAt(1) || 0;
+  return 'av-c' + (n % 12);
+}
+
+// ─── BUILD PHONEBOOK CARD (new grid style) ───────────────────────────
+function buildPbCard(c) {
+  const cIdx = contacts.indexOf(c);
   const div = document.createElement('div');
-  div.className = 'card active-card';
-  div.style.animationDelay = delay + 's';
-  const idx = contacts.indexOf(c);
-  const avCol = avatarColor(c.name, false);
+  div.className = 'pb-card';
+  div.dataset.contactIdx = cIdx;
+  const avCol = avatarColorPb(c.name);
+  const statusCls = c.status === 'Active' ? 'sp-active' : c.status === 'Replaced' ? 'sp-replaced' : 'sp-deactivated';
   div.innerHTML = `
+    <input type="checkbox" class="pb-card-chk card-checkbox" data-idx="${cIdx}"
+      onchange="toggleCardSelect(${cIdx}, this.checked)" onclick="event.stopPropagation()"/>
+    <span class="pb-card-status status-pill ${statusCls}">${escHtml(c.status)}</span>
+    <div class="pb-card-av ${avCol}">${escHtml(initials(c.name))}</div>
+    <div class="pb-card-name" title="${escHtml(c.name)}">${escHtml(c.name)}</div>
+    <div class="pb-card-email ${c.email ? '' : 'missing'}" title="${escHtml(c.email)}">${c.email ? escHtml(c.email) : 'No email'}</div>
+    <div class="pb-card-actions">
+      <button class="pb-card-btn" onclick="openEditModal(${cIdx})" title="View">
+        <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" stroke="currentColor" stroke-width="1.4"/></svg>
+        View
+      </button>
+      <div class="pb-card-sep"></div>
+      <button class="pb-card-btn" onclick="openEditModal(${cIdx})" title="Edit">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M11 2l3 3-9 9H2v-3l9-9z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        Edit
+      </button>
+      <div class="pb-card-sep"></div>
+      ${c.email ? `<button class="pb-card-btn" onclick="copyEmail('${escHtml(c.email)}',this)" title="Copy email">
+        <svg viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M3 11H2a1 1 0 01-1-1V2a1 1 0 011-1h8a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.4"/></svg>
+        Copy
+      </button>` : `<button class="pb-card-btn" style="opacity:.35;cursor:default" disabled>
+        <svg viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M3 11H2a1 1 0 01-1-1V2a1 1 0 011-1h8a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.4"/></svg>
+        Copy
+      </button>`}
+      <div class="pb-card-sep"></div>
+      <button class="pb-card-btn" onclick="openEditModal(${cIdx})" title="More">
+        <svg viewBox="0 0 16 16" fill="none"><circle cx="3" cy="8" r="1.2" fill="currentColor"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/><circle cx="13" cy="8" r="1.2" fill="currentColor"/></svg>
+      </button>
+    </div>`;
+  return div;
+}
+
+function renderPhonebook() {
+  const el  = document.getElementById('results');
+  const lbl = document.getElementById('resultsLabel');
+  const selectAllRow = document.getElementById('selectAllRow');
+
+  let all = dedupe([...contacts]);
+
+  if (pbFilter === 'missing')      all = all.filter(c => !c.email);
+  else if (pbFilter !== 'all')     all = all.filter(c => c.status === pbFilter);
+
+  const sortVal = (document.getElementById('pbSort') || {}).value || 'az';
+  if (sortVal === 'za')       all.sort((a,b) => b.name.localeCompare(a.name, undefined, {sensitivity:'base'}));
+  else if (sortVal === 'status') {
+    const ord = {Active:0,Replaced:1,Deactivated:2};
+    all.sort((a,b) => (ord[a.status]-ord[b.status]) || a.name.localeCompare(b.name, undefined, {sensitivity:'base'}));
+  } else                      all.sort((a,b) => a.name.localeCompare(b.name, undefined, {sensitivity:'base'}));
+
+  selectAllRow.classList.toggle('visible', all.length > 0);
+
+  if (all.length === 0) {
+    lbl.textContent = '';
+    el.innerHTML = `<div class="state-box">
+      <div class="state-icon">📖</div>
+      <div class="state-title">No contacts found</div>
+      <div class="state-sub">Try a different filter or import contacts.</div>
+    </div>`;
+    buildAlphabetBar([]);
+    return;
+  }
+
+  const filterLabel = pbFilter === 'all' ? '' : ` · ${pbFilter==='missing'?'Missing Email':pbFilter}`;
+  lbl.textContent = `${all.length} contact${all.length===1?'':'s'} ${sortVal==='az'?'A–Z':sortVal==='za'?'Z–A':'by Status'}${filterLabel}`;
+
+  const groups = {};
+  const groupOrder = [];
+  all.forEach(c => {
+    const key = sortVal === 'status' ? c.status : c.name[0].toUpperCase();
+    if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
+    groups[key].push(c);
+  });
+
+  buildAlphabetBar(sortVal === 'status' ? [] : Object.keys(groups));
+
+  const frag = document.createDocumentFragment();
+  let gi = 0;
+  groupOrder.forEach(key => {
+    const groupDiv = document.createElement('div');
+    groupDiv.className = 'phonebook-letter-group';
+    groupDiv.id = 'pb-group-' + key;
+    const header = document.createElement('div');
+    header.className = 'phonebook-letter-header';
+    header.textContent = key;
+    groupDiv.appendChild(header);
+    if (pbView === 'list') {
+      groupDiv.className = 'pb-list-group';
+      groups[key].forEach(c => { groupDiv.appendChild(buildListItem(c)); gi++; });
+    } else {
+      // 4-column grid for card view
+      const grid = document.createElement('div');
+      grid.className = 'pb-grid';
+      groups[key].forEach(c => {
+        const card = buildPbCard(c);
+        card.style.animationDelay = Math.min(gi * 0.02, 0.6) + 's';
+        grid.appendChild(card);
+        gi++;
+      });
+      groupDiv.appendChild(grid);
+    }
+    frag.appendChild(groupDiv);
+  });
+  el.innerHTML = '';
+  el.appendChild(frag);
+  refreshSelectedState();
+}
+
+function buildAlphabetBar(activeLetters) {
+  const bar = document.getElementById('alphabetBar');
+  if (!bar) return;
+  const activeSet = new Set(activeLetters);
+  bar.innerHTML = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(l => {
+    const has = activeSet.has(l);
+    return `<button class="alpha-btn ${has?'':'disabled'}" ${has?`onclick="jumpToLetter('${l}')"`:''}>${l}</button>`;
+  }).join('');
+}
+
+function jumpToLetter(letter) {
+  const el = document.getElementById('pb-group-' + letter);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function buildListItem(c) {
+  const cIdx = contacts.indexOf(c);
+  const div = document.createElement('div');
+  div.className = 'pb-list-item';
+  const avCol = avatarColor(c.name, c.status);
+  div.innerHTML = `
+    <div class="pb-list-avatar ${avCol}">${escHtml(initials(c.name))}</div>
+    <span class="pb-list-name">${escHtml(c.name)}</span>
+    <span class="status-pill ${statusPillClass(c.status)}" style="font-size:9px;padding:3px 8px">${escHtml(c.status)}</span>
+    <span class="pb-list-email ${c.email?'':'missing'}">${c.email?escHtml(c.email):'No email'}</span>
+    ${c.email?`<button class="pb-list-copy" onclick="copyEmail('${escHtml(c.email)}',this)">Copy</button>`:''}
+    <button class="pb-list-edit" onclick="openEditModal(${cIdx})">Edit</button>`;
+  return div;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  BUILD CARD
+// ═══════════════════════════════════════════════════════════════════
+function buildCard(c, q, delay) {
+  const div = document.createElement('div');
+  const cIdx = contacts.indexOf(c);
+  div.className = `card ${cardClass(c.status)} selectable`;
+  div.style.animationDelay = delay + 's';
+  div.dataset.contactIdx = cIdx;
+  const avCol = avatarColor(c.name, c.status);
+  div.innerHTML = `
+    <input type="checkbox" class="card-checkbox" data-idx="${cIdx}"
+      onchange="toggleCardSelect(${cIdx}, this.checked)" onclick="event.stopPropagation()"/>
     <div class="card-inner">
       <div class="card-top">
         <div class="avatar ${avCol}">${escHtml(initials(c.name))}</div>
@@ -677,43 +1670,48 @@ function buildActiveCard(c, q, delay) {
           <div class="card-name">${highlight(c.name, q)}</div>
           <div class="card-email-sub">${c.email ? highlight(c.email, q) : '<span style="color:var(--text3);font-style:italic;font-family:inherit">No email on file</span>'}</div>
         </div>
-        <span class="status-pill sp-active">Active</span>
+        <span class="status-pill ${statusPillClass(c.status)}">${escHtml(c.status)}</span>
       </div>
       <hr class="card-divider"/>
       <div class="card-row">
         <span class="row-label">Email</span>
-        <span class="row-val ${c.email ? '' : 'missing'}">${c.email ? escHtml(c.email) : 'Not available'}</span>
-        ${c.email ? `<button class="copy-btn" onclick="copyEmail('${escHtml(c.email)}',this)">Copy</button>` : ''}
+        <span class="row-val ${c.email?'':'missing'}">${c.email?escHtml(c.email):'Not available'}</span>
+        ${c.email?`<button class="copy-btn" onclick="copyEmail('${escHtml(c.email)}',this)">Copy</button>`:''}
       </div>
+      ${c.status==='Replaced'&&c.replacedBy?`
+      <div class="replaced-by-strip">
+        <div class="strip-av">${escHtml(initials(c.replacedBy))}</div>
+        <span class="strip-label">Replaced by</span>
+        <span class="strip-name">${escHtml(c.replacedBy)}</span>
+        ${c.replacementEmail?`<span class="strip-email">${escHtml(c.replacementEmail)}</span>
+        <button class="copy-btn" style="margin-left:6px" onclick="copyEmail('${escHtml(c.replacementEmail)}',this)">Copy</button>`:''}
+      </div>`:''}
       <div class="card-row" style="margin-top:8px">
-        <span class="row-label"></span>
-        <span style="flex:1"></span>
-        <button class="btn" style="font-size:11px;padding:4px 12px" onclick="openEditModal(${findIdx(c)})">Edit</button>
+        <span class="row-label"></span><span style="flex:1"></span>
+        <button class="btn" style="font-size:11px;padding:4px 12px" onclick="openEditModal(${cIdx})">Edit</button>
       </div>
     </div>`;
   return div;
 }
 
-// ─── BUILD PAIR GROUP ────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+//  BUILD PAIR GROUP
+// ═══════════════════════════════════════════════════════════════════
 function buildPairGroup(g, q, delay) {
   const wrap = document.createElement('div');
   wrap.className = 'pair-group';
-
-  // — Replacement (active) card FIRST —
   const repLabel = document.createElement('div');
   repLabel.className = 'pair-section-label';
   repLabel.textContent = 'Replacement contact (active)';
   wrap.appendChild(repLabel);
 
   if (g.replacement) {
-    const rc = buildActiveCard(g.replacement, q, delay);
-    wrap.appendChild(rc);
+    wrap.appendChild(buildCard(g.replacement, q, delay));
   } else {
-    // No matching active contact found — build synthetic card from replacement data
     const rname = g.original.replacedBy || 'Unknown';
     const remail = g.original.replacementEmail || '';
     const synth = document.createElement('div');
-    synth.className = 'card active-card';
+    synth.className = 'card active-card selectable';
     synth.style.animationDelay = delay + 's';
     synth.innerHTML = `
       <div class="card-inner">
@@ -721,126 +1719,136 @@ function buildPairGroup(g, q, delay) {
           <div class="avatar av-green">${escHtml(initials(rname))}</div>
           <div class="card-info">
             <div class="card-name">${highlight(rname, q)}</div>
-            <div class="card-email-sub">${remail ? highlight(remail, q) : '<span style="color:var(--text3);font-style:italic;font-family:inherit">No email on file</span>'}</div>
+            <div class="card-email-sub">${remail?highlight(remail,q):'<span style="color:var(--text3);font-style:italic;font-family:inherit">No email on file</span>'}</div>
           </div>
           <span class="status-pill sp-active">Active</span>
         </div>
         <hr class="card-divider"/>
         <div class="card-row">
           <span class="row-label">Email</span>
-          <span class="row-val ${remail ? '' : 'missing'}">${remail ? escHtml(remail) : 'Not available'}</span>
-          ${remail ? `<button class="copy-btn" onclick="copyEmail('${escHtml(remail)}',this)">Copy</button>` : ''}
+          <span class="row-val ${remail?'':'missing'}">${remail?escHtml(remail):'Not available'}</span>
+          ${remail?`<button class="copy-btn" onclick="copyEmail('${escHtml(remail)}',this)">Copy</button>`:''}
         </div>
       </div>`;
     wrap.appendChild(synth);
   }
 
-  // — Connector —
   const conn = document.createElement('div');
   conn.className = 'pair-connector';
   conn.innerHTML = `<div class="connector-line"></div><span class="connector-badge">↑ replaces ↓</span><div class="connector-line rev"></div>`;
   wrap.appendChild(conn);
 
-  // — Original (replaced) card SECOND —
   const origLabel = document.createElement('div');
   origLabel.className = 'pair-section-label';
   origLabel.style.marginTop = '0';
   origLabel.textContent = 'Original contact (replaced)';
   wrap.appendChild(origLabel);
-
-  const origCard = document.createElement('div');
-  origCard.className = 'card replaced-card';
-  origCard.style.animationDelay = (delay + 0.05) + 's';
-  const oc = g.original;
-  const rname2 = oc.replacedBy || '';
-  const remail2 = oc.replacementEmail || '';
-  origCard.innerHTML = `
-    <div class="card-inner">
-      <div class="card-top">
-        <div class="avatar av-amber">${escHtml(initials(oc.name))}</div>
-        <div class="card-info">
-          <div class="card-name">${highlight(oc.name, q)}</div>
-          <div class="card-email-sub">${oc.email ? highlight(oc.email, q) : '<span style="color:var(--text3);font-style:italic;font-family:inherit">No email on file</span>'}</div>
-        </div>
-        <span class="status-pill sp-replaced">Replaced</span>
-      </div>
-      <hr class="card-divider"/>
-      <div class="card-row">
-        <span class="row-label">Email</span>
-        <span class="row-val ${oc.email ? '' : 'missing'}">${oc.email ? escHtml(oc.email) : 'Not available'}</span>
-        ${oc.email ? `<button class="copy-btn" onclick="copyEmail('${escHtml(oc.email)}',this)">Copy</button>` : ''}
-      </div>
-      ${rname2 ? `
-      <div class="replaced-by-strip">
-        <div class="strip-av">${escHtml(initials(rname2))}</div>
-        <span class="strip-label">Replaced by</span>
-        <span class="strip-name">${escHtml(rname2)}</span>
-        ${remail2 ? `<span class="strip-email">${escHtml(remail2)}</span>
-        <button class="copy-btn" style="margin-left:6px" onclick="copyEmail('${escHtml(remail2)}',this)">Copy</button>` : ''}
-      </div>` : ''}
-      <div class="card-row" style="margin-top:8px">
-        <span class="row-label"></span>
-        <span style="flex:1"></span>
-        <button class="btn" style="font-size:11px;padding:4px 12px" onclick="openEditModal(${findIdx(oc)})">Edit</button>
-      </div>
-    </div>`;
-  wrap.appendChild(origCard);
+  wrap.appendChild(buildCard(g.original, q, delay + 0.05));
   return wrap;
 }
 
-function findIdx(c) {
-  return contacts.findIndex(x => x.name === c.name && x.email === c.email);
+// ═══════════════════════════════════════════════════════════════════
+//  MULTI-SELECT
+// ═══════════════════════════════════════════════════════════════════
+function toggleCardSelect(idx, checked) {
+  if (checked) selectedContacts.add(idx); else selectedContacts.delete(idx);
+  refreshSelectedState();
+  updateBulkBar();
 }
 
-// ─── DROPDOWN ────────────────────────────────────────────────────────
-function renderDropdown(q) {
-  const dd = document.getElementById('dropdown');
-  if (!q || q.length < 3) { closeDropdown(); return; }
-  const base = dedupe(contacts);
-  const matches = base.filter(c =>
-    fuzzyMatch(c.name, q) || fuzzyMatch(c.email, q)
-  ).slice(0, 7);
-
-  if (!matches.length) { closeDropdown(); return; }
-  dropItems = matches;
-  dropFocusIdx = -1;
-  dd.innerHTML = matches.map((c, i) => `
-    <div class="drop-item" data-idx="${i}"
-      onmousedown="selectDropItem(${i})"
-      onmouseover="setDropFocus(${i})">
-      <div>
-        <div class="drop-name">${highlight(c.name, q)}</div>
-        ${c.email ? `<div class="drop-email">${highlight(c.email, q)}</div>` : ''}
-      </div>
-      <span class="drop-badge ${c.status==='Active'?'db-active':'db-replaced'}">${c.status}</span>
-    </div>`).join('');
-  dd.classList.add('open');
-}
-
-function closeDropdown() {
-  document.getElementById('dropdown').classList.remove('open');
-  dropFocusIdx = -1; dropItems = [];
-}
-
-function setDropFocus(i) {
-  dropFocusIdx = i;
-  document.querySelectorAll('.drop-item').forEach((el, j) => {
-    el.classList.toggle('focused', j === i);
+function toggleSelectAll(checked) {
+  document.querySelectorAll('.card-checkbox').forEach(cb => {
+    const idx = parseInt(cb.dataset.idx);
+    if (checked) selectedContacts.add(idx); else selectedContacts.delete(idx);
+    cb.checked = checked;
   });
+  refreshSelectedState();
+  updateBulkBar();
 }
 
-function selectDropItem(i) {
-  const c = dropItems[i];
-  if (!c) return;
-  document.getElementById('searchInput').value = c.name;
-  currentQuery = c.name;
-  addRecent(c.name);
-  closeDropdown();
+function refreshSelectedState() {
+  document.querySelectorAll('.card, .pb-card').forEach(card => {
+    const idx = parseInt(card.dataset.contactIdx);
+    const sel = selectedContacts.has(idx);
+    card.classList.toggle('selected', sel);
+    const cb = card.querySelector('.card-checkbox');
+    if (cb) cb.checked = sel;
+  });
+  const selCount = document.getElementById('selCount');
+  if (selCount) selCount.textContent = selectedContacts.size + ' selected';
+  const allChk = document.getElementById('selectAllChk');
+  if (allChk) {
+    const total = document.querySelectorAll('.card-checkbox').length;
+    allChk.checked = total > 0 && selectedContacts.size === total;
+    allChk.indeterminate = selectedContacts.size > 0 && selectedContacts.size < total;
+  }
+}
+
+function clearSelection() {
+  selectedContacts.clear();
+  refreshSelectedState();
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  const bar = document.getElementById('bulkBar');
+  const cnt = document.getElementById('bulkCount');
+  if (!bar) return;
+  bar.classList.toggle('visible', selectedContacts.size > 0);
+  if (cnt) cnt.textContent = selectedContacts.size + ' selected';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  BULK ACTIONS
+// ═══════════════════════════════════════════════════════════════════
+async function applyBulkStatus() {
+  const sel = document.getElementById('bulkStatusSelect');
+  if (!sel || !sel.value) { showToast('Pick a status first'); return; }
+  const newStatus = sel.value;
+  const idxs = [...selectedContacts];
+  setSyncStatus('syncing', 'Updating…');
+  let ok = 0;
+  for (const idx of idxs) {
+    const c = contacts[idx];
+    if (!c) continue;
+    c.status = newStatus;
+    const success = await dbUpdate(c);
+    if (success) ok++;
+  }
+  sel.value = '';
+  clearSelection();
   renderResults();
-  updateClearBtn();
+  showToast(`Updated ${ok} contact${ok===1?'':'s'} to ${newStatus}`);
 }
 
-// ─── SEARCH EVENTS ───────────────────────────────────────────────────
+async function bulkDelete() {
+  if (!confirm(`Delete ${selectedContacts.size} contact${selectedContacts.size===1?'':'s'}?`)) return;
+  const idxs = [...selectedContacts].sort((a,b) => b-a);
+  for (const idx of idxs) {
+    const c = contacts[idx];
+    if (!c) continue;
+    await dbDelete(c.id);
+    contacts.splice(idx, 1);
+  }
+  clearSelection();
+  updateCount();
+  renderResults();
+  showToast('Contacts deleted');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  FILTER CHIPS (Search mode)
+// ═══════════════════════════════════════════════════════════════════
+function setFilter(filter, btn) {
+  currentFilter = filter;
+  document.querySelectorAll('#searchPanel .chip').forEach(c => c.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderResults();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  SEARCH INPUT HANDLERS
+// ═══════════════════════════════════════════════════════════════════
 function onSearch() {
   const q = document.getElementById('searchInput').value.trim();
   currentQuery = q;
@@ -852,29 +1860,25 @@ function onSearch() {
 function onKeyDown(e) {
   const dd = document.getElementById('dropdown');
   if (!dd.classList.contains('open')) return;
-  if (e.key === 'ArrowDown') {
-    e.preventDefault();
-    setDropFocus(Math.min(dropFocusIdx + 1, dropItems.length - 1));
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault();
-    setDropFocus(Math.max(dropFocusIdx - 1, 0));
-  } else if (e.key === 'Enter') {
-    e.preventDefault();
-    if (dropFocusIdx >= 0) selectDropItem(dropFocusIdx);
-    else closeDropdown();
-  } else if (e.key === 'Escape') {
-    closeDropdown();
-  }
+  if (e.key === 'ArrowDown') { e.preventDefault(); moveFocus(1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); moveFocus(-1); }
+  else if (e.key === 'Enter') { e.preventDefault(); selectFocused(); }
+  else if (e.key === 'Escape') { closeDropdown(); }
 }
 
 function onFocus() {
   const q = document.getElementById('searchInput').value.trim();
-  if (q.length >= 3) renderDropdown(q);
+  if (q) renderDropdown(q);
   showRecent();
 }
 
 function onBlur() {
-  setTimeout(closeDropdown, 150);
+  setTimeout(() => { closeDropdown(); }, 180);
+}
+
+function updateClearBtn() {
+  const q = document.getElementById('searchInput').value;
+  document.getElementById('clearBtn').classList.toggle('visible', q.length > 0);
 }
 
 function clearSearch() {
@@ -885,21 +1889,57 @@ function clearSearch() {
   renderResults();
 }
 
-function updateClearBtn() {
-  const btn = document.getElementById('clearBtn');
-  const q = document.getElementById('searchInput').value;
-  btn.classList.toggle('visible', q.length > 0);
+function renderDropdown(q) {
+  const dd = document.getElementById('dropdown');
+  if (!q || q.length < 1) { closeDropdown(); return; }
+  const base = dedupe(contacts);
+  const matches = base.filter(c => fuzzyMatch(c.name, q) || fuzzyMatch(c.email, q)).slice(0, 7);
+  if (!matches.length) { closeDropdown(); return; }
+  dropItems = matches;
+  dropFocusIdx = -1;
+  dd.innerHTML = matches.map((c, i) => `
+    <div class="drop-item" data-idx="${i}" onmousedown="selectDropItem(${i})">
+      <div class="drop-name">${highlight(c.name, q)}</div>
+      <div class="drop-email">${c.email ? highlight(c.email, q) : '<span style="color:var(--text3)">No email</span>'}</div>
+      <span class="drop-badge ${dropBadgeClass(c.status)}">${escHtml(c.status)}</span>
+    </div>`).join('');
+  dd.classList.add('open');
 }
 
-// ─── RECENT SEARCHES ─────────────────────────────────────────────────
+function closeDropdown() {
+  document.getElementById('dropdown').classList.remove('open');
+  dropFocusIdx = -1;
+}
+
+function moveFocus(dir) {
+  const items = document.querySelectorAll('.drop-item');
+  items.forEach(i => i.classList.remove('focused'));
+  dropFocusIdx = Math.max(0, Math.min(dropItems.length - 1, dropFocusIdx + dir));
+  items[dropFocusIdx] && items[dropFocusIdx].classList.add('focused');
+}
+
+function selectFocused() {
+  if (dropFocusIdx >= 0 && dropItems[dropFocusIdx]) selectDropItem(dropFocusIdx);
+}
+
+function selectDropItem(i) {
+  const c = dropItems[i];
+  if (!c) return;
+  document.getElementById('searchInput').value = c.name;
+  currentQuery = c.name;
+  addRecent(c.name);
+  closeDropdown();
+  renderResults();
+}
+
 function addRecent(q) {
+  if (!q || q.length < 2) return;
   recentSearches = [q, ...recentSearches.filter(r => r !== q)].slice(0, 5);
-  saveRecent();
-  showRecent();
+  saveRecent(); showRecent();
 }
 
 function showRecent() {
-  const row = document.getElementById('recentRow');
+  const row  = document.getElementById('recentRow');
   const tags = document.getElementById('recentTags');
   if (!recentSearches.length) { row.style.display = 'none'; return; }
   row.style.display = 'flex';
@@ -912,47 +1952,12 @@ function applyRecent(q) {
   document.getElementById('searchInput').value = q;
   currentQuery = q;
   updateClearBtn();
-  closeDropdown();
   renderResults();
 }
 
-// ─── FILTER CHIPS ────────────────────────────────────────────────────
-function setFilter(f, el) {
-  currentFilter = f;
-  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-  el.classList.add('active');
-  renderResults();
-}
-
-// ─── COPY EMAIL ──────────────────────────────────────────────────────
-function copyEmail(email, btn) {
-  navigator.clipboard.writeText(email).then(() => {
-    if (btn) {
-      btn.textContent = 'Copied!';
-      btn.classList.add('copied');
-      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1800);
-    }
-    showToast('Email copied: ' + email);
-  }).catch(() => {
-    // fallback
-    const ta = document.createElement('textarea');
-    ta.value = email; ta.style.position = 'fixed'; ta.style.opacity = '0';
-    document.body.appendChild(ta); ta.select();
-    document.execCommand('copy'); document.body.removeChild(ta);
-    showToast('Email copied: ' + email);
-  });
-}
-
-// ─── TOAST ───────────────────────────────────────────────────────────
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  document.getElementById('toastMsg').textContent = msg;
-  t.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
-}
-
-// ─── ADD / EDIT MODAL ────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+//  ADD / EDIT MODAL
+// ═══════════════════════════════════════════════════════════════════
 function openAddModal() {
   editingIdx = null;
   document.getElementById('modalTitle').textContent = 'Add Contact';
@@ -967,58 +1972,124 @@ function openAddModal() {
 }
 
 function openEditModal(idx) {
-  if (idx < 0 || idx >= contacts.length) return;
-  editingIdx = idx;
+  requireAdmin(() => _openEditModal(idx));
+}
+
+function _openEditModal(idx) {
   const c = contacts[idx];
+  if (!c) return;
+  editingIdx = idx;
   document.getElementById('modalTitle').textContent = 'Edit Contact';
-  document.getElementById('f-name').value = c.name || '';
-  document.getElementById('f-email').value = c.email || '';
-  document.getElementById('f-status').value = c.status || 'Active';
+  document.getElementById('f-name').value = c.name;
+  document.getElementById('f-email').value = c.email;
+  document.getElementById('f-status').value = c.status;
   document.getElementById('f-replacedBy').value = c.replacedBy || '';
   document.getElementById('f-replacementEmail').value = c.replacementEmail || '';
-  toggleReplaced();
-  document.getElementById('deleteBtn').style.display = 'inline-flex';
+  document.getElementById('replaced-fields').style.display = c.status === 'Replaced' ? '' : 'none';
+  document.getElementById('deleteBtn').style.display = '';
   document.getElementById('modalOverlay').classList.add('open');
 }
 
 function toggleReplaced() {
   const s = document.getElementById('f-status').value;
-  document.getElementById('replaced-fields').style.display = s === 'Replaced' ? 'block' : 'none';
+  document.getElementById('replaced-fields').style.display = s === 'Replaced' ? '' : 'none';
 }
 
-function saveContact() {
+function closeModal(e) { if (e.target === document.getElementById('modalOverlay')) closeModalDirect(); }
+function closeModalDirect() {
+  document.getElementById('modalOverlay').classList.remove('open');
+  editingIdx = null;
+}
+
+async function saveContact() {
   const name = document.getElementById('f-name').value.trim();
   if (!name) { showToast('Name is required'); return; }
   const c = {
     name,
-    email: document.getElementById('f-email').value.trim(),
-    status: document.getElementById('f-status').value,
-    replacedBy: document.getElementById('f-replacedBy').value.trim(),
-    replacementEmail: document.getElementById('f-replacementEmail').value.trim()
+    email:            document.getElementById('f-email').value.trim().toLowerCase(),
+    status:           document.getElementById('f-status').value,
+    replacedBy:       document.getElementById('f-replacedBy').value.trim(),
+    replacementEmail: document.getElementById('f-replacementEmail').value.trim().toLowerCase(),
   };
+
   if (editingIdx !== null && editingIdx >= 0) {
-    contacts[editingIdx] = c;
-    showToast('Contact updated');
+    // Update existing — carry over the Supabase id
+    c.id = contacts[editingIdx].id;
+    const ok = await dbUpdate(c);
+    if (ok) {
+      contacts[editingIdx] = c;
+      updateCount(); closeModalDirect();
+      showToast('Contact updated'); renderResults();
+    }
   } else {
-    contacts.push(c);
-    showToast('Contact added');
+    // New contact — check for duplicate by email first, then name
+    const dupIdx = findDuplicate(c.email, c.name);
+    if (dupIdx !== -1) {
+      closeModalDirect();
+      openDupModal(c, dupIdx, async (action) => {
+        if (action === 'replace') {
+          c.id = contacts[dupIdx].id;
+          const ok = await dbUpdate(c);
+          if (ok) { contacts[dupIdx] = c; updateCount(); renderResults(); showToast('Contact replaced'); }
+        } else if (action === 'both') {
+          const saved = await dbInsert(c);
+          if (saved) { contacts.push(saved); updateCount(); renderResults(); showToast('Both contacts kept'); }
+        } else {
+          showToast('Kept existing contact');
+        }
+      });
+    } else {
+      const saved = await dbInsert(c);
+      if (saved) {
+        contacts.push(saved);
+        updateCount(); closeModalDirect();
+        showToast('Contact added'); renderResults();
+      }
+    }
   }
-  save(); updateCount(); closeModalDirect(); renderResults();
 }
 
-function deleteContact() {
+async function deleteContact() {
   if (editingIdx === null) return;
   if (!confirm('Delete this contact?')) return;
-  contacts.splice(editingIdx, 1);
-  save(); updateCount(); closeModalDirect();
-  showToast('Contact deleted');
-  renderResults();
+  const c = contacts[editingIdx];
+  const ok = await dbDelete(c.id);
+  if (ok) {
+    contacts.splice(editingIdx, 1);
+    updateCount(); closeModalDirect();
+    showToast('Contact deleted'); renderResults();
+  }
 }
 
-function closeModal(e) { if (e.target === document.getElementById('modalOverlay')) closeModalDirect(); }
-function closeModalDirect() { document.getElementById('modalOverlay').classList.remove('open'); }
+// ═══════════════════════════════════════════════════════════════════
+//  DUPLICATE MODAL
+// ═══════════════════════════════════════════════════════════════════
+function openDupModal(incoming, existingIdx, callback) {
+  _dupResolveCallback = { incoming, existingIdx, callback };
+  const existing = contacts[existingIdx];
+  document.getElementById('dupDesc').textContent =
+    `"${incoming.name}"${incoming.email ? ' (' + incoming.email + ')' : ''} matches existing contact "${existing.name}"${existing.email ? ' (' + existing.email + ')' : ''}. What would you like to do?`;
+  document.getElementById('dupOverlay').classList.add('open');
+}
 
-// ─── IMPORT EXCEL ─────────────────────────────────────────────────────
+function resolveDup(action) {
+  document.getElementById('dupOverlay').classList.remove('open');
+  if (!_dupResolveCallback) return;
+  const { callback } = _dupResolveCallback;
+  _dupResolveCallback = null;
+  if (action === 'skip') {
+    dupQueue = [];
+    showToast('Skipped remaining duplicates');
+    renderResults();
+    return;
+  }
+  callback(action);
+  if (dupQueue.length > 0) setTimeout(processDupQueue, 100);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  IMPORT EXCEL
+// ═══════════════════════════════════════════════════════════════════
 function triggerImport() { document.getElementById('fileInput').click(); }
 
 function handleImport(e) {
@@ -1032,8 +2103,6 @@ function handleImport(e) {
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
       if (!rows.length) { showToast('No data found in file'); return; }
-
-      // Map columns flexibly
       const mapped = rows.map(r => {
         const keys = Object.keys(r);
         const get = (...names) => {
@@ -1045,64 +2114,158 @@ function handleImport(e) {
         };
         const emailRaw = get('email','clean');
         const emailMatch = emailRaw.match(/[\w.+\-]+@[\w.\-]+\.\w+/);
+        const statusRaw = get('status') || 'Active';
+        const normalizeStatus = s => {
+          const sl = s.toLowerCase();
+          if (sl === 'active') return 'Active';
+          if (sl === 'replaced') return 'Replaced';
+          if (sl === 'deactivated') return 'Deactivated';
+          return 'Active';
+        };
         return {
-          name: get('full name','name'),
-          email: emailMatch ? emailMatch[0] : '',
-          status: get('status') || 'Active',
-          replacedBy: get('replaced by','replacedby'),
+          name:             get('full name','name'),
+          email:            emailMatch ? emailMatch[0].toLowerCase() : '',
+          status:           normalizeStatus(statusRaw),
+          replacedBy:       get('replaced by','replacedby'),
           replacementEmail: (() => {
             const raw = get('replacement email','replacementemail');
             const m = raw.match(/[\w.+\-]+@[\w.\-]+\.\w+/);
-            return m ? m[0] : '';
+            return m ? m[0].toLowerCase() : '';
           })()
         };
       }).filter(c => c.name);
-
       pendingImport = mapped;
       showPreview(mapped);
-    } catch(err) {
-      showToast('Error reading file: ' + err.message);
-    }
+    } catch(err) { showToast('Error reading file: ' + err.message); }
   };
   reader.readAsBinaryString(file);
 }
 
+// ═══════════════════════════════════════════════════════════════════
+//  IMPORT PREVIEW
+// ═══════════════════════════════════════════════════════════════════
 function showPreview(data) {
-  document.getElementById('previewInfo').textContent = `${data.length} contacts found. Review before importing.`;
-  const wrap = document.getElementById('previewTableWrap');
-  const sample = data.slice(0, 20);
-  wrap.innerHTML = `<table class="preview-table">
-    <thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Replaced By</th></tr></thead>
-    <tbody>${sample.map(c => `<tr>
-      <td>${escHtml(c.name)}</td>
-      <td style="font-family:'DM Mono',monospace">${escHtml(c.email) || '<span style="color:var(--text3)">—</span>'}</td>
-      <td><span class="drop-badge ${c.status==='Active'?'db-active':'db-replaced'}">${escHtml(c.status)}</span></td>
-      <td>${escHtml(c.replacedBy) || '<span style="color:var(--text3)">—</span>'}</td>
-    </tr>`).join('')}
-    ${data.length > 20 ? `<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:10px">...and ${data.length - 20} more</td></tr>` : ''}
-    </tbody></table>`;
+  previewSelected = new Set(data.map((_,i) => i));
+  document.getElementById('previewInfo').textContent =
+    `${data.length} contact${data.length!==1?'s':''} found. Select which to import.`;
+  renderPreviewTable(data);
   document.getElementById('previewOverlay').classList.add('open');
 }
 
-function confirmImport() {
+function renderPreviewTable(data) {
+  updatePreviewSelCount();
+  const wrap = document.getElementById('previewTableWrap');
+  const allChecked = previewSelected.size === data.length;
+  const rows = data.map((c,i) => `
+    <tr class="${!previewSelected.has(i)?'row-deselected':''}" id="prev-row-${i}">
+      <td><input type="checkbox" ${previewSelected.has(i)?'checked':''} onchange="togglePreviewRow(${i},this.checked)"/></td>
+      <td>${escHtml(c.name)}</td>
+      <td style="font-family:'DM Mono',monospace">${escHtml(c.email)||'<span style="color:var(--text3)">—</span>'}</td>
+      <td><span class="drop-badge ${dropBadgeClass(c.status)}">${escHtml(c.status)}</span></td>
+      <td>${escHtml(c.replacedBy)||'<span style="color:var(--text3)">—</span>'}</td>
+    </tr>`).join('');
+  wrap.innerHTML = `<table class="preview-table">
+    <thead><tr>
+      <th><input type="checkbox" ${allChecked?'checked':''} onchange="toggleAllPreviewRows(this.checked)"/></th>
+      <th>Name</th><th>Email</th><th>Status</th><th>Replaced By</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function togglePreviewRow(i, checked) {
+  if (checked) previewSelected.add(i); else previewSelected.delete(i);
+  const row = document.getElementById(`prev-row-${i}`);
+  if (row) row.className = checked ? '' : 'row-deselected';
+  updatePreviewSelCount();
+}
+
+function toggleAllPreviewRows(checked) {
+  previewSelected = checked ? new Set((pendingImport||[]).map((_,i)=>i)) : new Set();
+  renderPreviewTable(pendingImport||[]);
+}
+
+function updatePreviewSelCount() {
+  const el = document.getElementById('previewSelLabel');
+  if (el) el.textContent = previewSelected.size;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  CONFIRM IMPORT — uses Supabase upsert with email as conflict key
+// ═══════════════════════════════════════════════════════════════════
+async function confirmImport() {
   if (!pendingImport) return;
-  contacts = pendingImport;
-  pendingImport = null;
-  save(); updateCount(); closePreviewDirect();
-  showToast(`Imported ${contacts.length} contacts`);
-  renderResults();
+  const toImport = pendingImport.filter((_,i) => previewSelected.has(i));
+  if (!toImport.length) { showToast('No contacts selected'); return; }
+  closePreviewDirect();
+
+  setSyncStatus('syncing', 'Importing…');
+  showToast('Importing ' + toImport.length + ' contacts…');
+
+  const dbRows = toImport.map(c => ({
+    name:              c.name             || null,
+    email:             c.email            || null,
+    status:            c.status           || 'Active',
+    replaced_by:       c.replacedBy       || null,
+    replacement_email: c.replacementEmail || null,
+    updated_at:        new Date().toISOString(),
+  }));
+
+  // Deduplicate within the import batch itself (last row wins per email)
+  const emailSeen = new Map();
+  dbRows.forEach(r => { if (r.email) emailSeen.set(r.email.toLowerCase(), r); });
+  const deduped = [
+    ...emailSeen.values(),                          // unique-email rows
+    ...dbRows.filter(r => !r.email)                 // no-email rows kept as-is
+  ];
+
+  // Split by email presence for proper upsert strategy
+  const withEmail    = deduped.filter(r => r.email);
+  const withoutEmail = deduped.filter(r => !r.email);
+  let totalSaved = 0;
+
+  if (withEmail.length) {
+    const { data, error } = await sb.from('contacts')
+      .upsert(withEmail, { onConflict: 'email', ignoreDuplicates: false })
+      .select();
+    if (error) showToast('Upsert error: ' + error.message);
+    else totalSaved += data.length;
+  }
+
+  if (withoutEmail.length) {
+    // For no-email contacts: check by name, insert if new
+    for (const row of withoutEmail) {
+      const dupIdx = contacts.findIndex(c => !c.email && c.name.toLowerCase().trim() === (row.name||'').toLowerCase().trim());
+      if (dupIdx === -1) {
+        const { data, error } = await sb.from('contacts').insert(row).select().single();
+        if (!error && data) totalSaved++;
+      }
+      // silently skip name-duplicates among no-email contacts during bulk import
+    }
+  }
+
+  // Refresh local cache from DB
+  await fetchAll();
+  showToast(`Import complete — ${totalSaved} contact${totalSaved===1?'':'s'} saved`);
 }
 
 function closePreview(e) { if (e.target === document.getElementById('previewOverlay')) closePreviewDirect(); }
-function closePreviewDirect() { document.getElementById('previewOverlay').classList.remove('open'); pendingImport = null; }
+function closePreviewDirect() {
+  document.getElementById('previewOverlay').classList.remove('open');
+  pendingImport = null;
+  previewSelected = new Set();
+}
 
-// ─── EXPORT ───────────────────────────────────────────────────────────
+// Stub — no longer needed (queue handled per-item in confirmImport)
+function processDupQueue() {}
+
+// ═══════════════════════════════════════════════════════════════════
+//  EXPORT
+// ═══════════════════════════════════════════════════════════════════
 function exportContacts() {
   const data = dedupe(contacts).map(c => ({
-    'Full Name': c.name,
-    'Clean Email': c.email,
-    'Status': c.status,
-    'Replaced By': c.replacedBy,
+    'Full Name':         c.name,
+    'Clean Email':       c.email,
+    'Status':            c.status,
+    'Replaced By':       c.replacedBy,
     'Replacement Email': c.replacementEmail
   }));
   const ws = XLSX.utils.json_to_sheet(data);
@@ -1112,9 +2275,52 @@ function exportContacts() {
   showToast('Exported to Excel');
 }
 
-// ─── BOOT ─────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+//  CLEAR ALL DATA
+// ═══════════════════════════════════════════════════════════════════
+async function clearAllData() {
+  if (!confirm('This will permanently delete ALL contacts from Supabase. Are you sure?')) return;
+  const ok = await dbDeleteAll();
+  if (ok) {
+    contacts = [];
+    selectedContacts = new Set();
+    updateCount();
+    renderResults();
+    showToast('All contacts deleted from database');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  COPY EMAIL
+// ═══════════════════════════════════════════════════════════════════
+function copyEmail(email, btn) {
+  navigator.clipboard.writeText(email).then(() => {
+    showToast('Copied: ' + email);
+    if (btn) {
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1800);
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════════════════════
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════════════════════════
 init();
 showRecent();
+
 </script>
 </body>
 </html>
